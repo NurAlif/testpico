@@ -1,0 +1,748 @@
+<!DOCTYPE html>
+
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>WanderAI • Ollama + Google Maps Discovery</title>
+<!-- Tailwind CSS v3 with Plugins -->
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400;1,600&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+  tailwind.config = {
+    darkMode: "class",
+    theme: {
+      extend: {
+        colors: {
+          primary: "#1c463c",
+          "secondary-container": "#c8e3fd",
+          tertiary: "#5f3520",
+          "surface-container-highest": "#dce3eb",
+          "on-primary": "#ffffff",
+          "on-secondary-fixed-variant": "#2f495f",
+          "primary-fixed": "#bfecdd",
+          "primary-fixed-dim": "#a4d0c2",
+          "on-primary-container": "#aad5c7",
+          "surface-container-lowest": "#ffffff",
+          "inverse-on-surface": "#ebf1fa",
+          "tertiary-container": "#7a4b35",
+          "on-background": "#151c22",
+          "on-surface": "#151c22",
+          "on-surface-variant": "#414845",
+          error: "#ba1a1a",
+          "surface-container-high": "#e2e9f1",
+          "primary-container": "#355e53",
+          "on-error": "#ffffff",
+          "surface-container": "#e8eff7",
+          "error-container": "#ffdad6",
+          "on-primary-fixed": "#002019",
+          "on-tertiary-fixed-variant": "#673c27",
+          "on-secondary-fixed": "#001e31",
+          surface: "#f6f9ff",
+          "surface-tint": "#3d665b",
+          "surface-container-low": "#edf4fd",
+          "on-tertiary-container": "#febea2",
+          "outline-variant": "#c0c8c4",
+          "on-error-container": "#93000a",
+          "surface-dim": "#d4dbe3",
+          "surface-variant": "#dce3eb",
+          "on-tertiary": "#ffffff",
+          "tertiary-fixed": "#ffdbcc",
+          "on-secondary-container": "#4b657c",
+          "on-primary-fixed-variant": "#254e43",
+          "inverse-primary": "#a4d0c2",
+          "surface-bright": "#f6f9ff",
+          "on-tertiary-fixed": "#331202",
+          "secondary-fixed-dim": "#afcae3",
+          "on-secondary": "#ffffff",
+          background: "#f6f9ff",
+          secondary: "#476177",
+          outline: "#717975",
+          "tertiary-fixed-dim": "#f7b89c",
+          "secondary-fixed": "#cbe6ff",
+          "inverse-surface": "#2a3137"
+        },
+        fontFamily: {
+          sans: ['"Plus Jakarta Sans"', 'system-ui', 'sans-serif'],
+          serif: ['"Plus Jakarta Sans"', 'sans-serif'],
+        },
+        borderRadius: {
+          'DEFAULT': '1rem',
+          'lg': '2rem',
+          'xl': '2.5rem',
+          '2xl': '2rem',
+          '3xl': '2.5rem',
+          'full': '9999px'
+        },
+        boxShadow: {
+          'subtle': '0 2px 12px rgba(28, 70, 60, 0.04), 0 1px 3px rgba(0, 0, 0, 0.02)',
+          'elevated': '0 16px 36px -8px rgba(28, 70, 60, 0.08), 0 2px 6px rgba(0, 0, 0, 0.03)',
+          'modal': '0 25px 60px -15px rgba(21, 28, 34, 0.28), 0 0 0 1px rgba(192, 200, 196, 0.35)',
+        }
+      }
+    }
+  };
+</script>
+<style data-purpose="custom-styling">
+    body {
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      background-color: #f6f9ff;
+      color: #151c22;
+    }
+    
+    .map-grid-bg {
+      background-color: #e8eff7;
+      background-image: 
+        linear-gradient(#dce3eb 1px, transparent 1px),
+        linear-gradient(90deg, #dce3eb 1px, transparent 1px);
+      background-size: 32px 32px;
+    }
+    
+    .pulse-dot {
+      box-shadow: 0 0 0 0 rgba(28, 70, 60, 0.6);
+      animation: pulseAnimation 2s infinite cubic-bezier(0.66, 0, 0, 1);
+    }
+    
+    @keyframes pulseAnimation {
+      to {
+        box-shadow: 0 0 0 10px rgba(28, 70, 60, 0);
+      }
+    }
+</style>
+</head>
+<body class="text-on-surface bg-surface min-h-screen selection:bg-primary-fixed selection:text-on-primary-fixed antialiased">
+<!-- BEGIN: SiteHeader -->
+<header class="sticky top-0 z-30 bg-surface/85 backdrop-blur-md border-b border-outline-variant/40">
+<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-18 py-3.5 flex items-center justify-between">
+<!-- Brand Logo & Name -->
+<div class="flex items-center space-x-3">
+<div class="h-10 w-10 rounded-2xl bg-primary flex items-center justify-center text-on-primary shadow-sm shadow-primary/30">
+<svg class="w-5 h-5" fill="none" stroke="currentColor" viewbox="0 0 24 24">
+<circle cx="12" cy="12" r="10" stroke-width="1.8"></circle>
+<polygon fill="currentColor" points="12 8 8 16 16 12 12 8" stroke-linejoin="round" stroke-width="1.8"></polygon>
+</svg>
+</div>
+<div class="flex flex-col">
+<span class="font-bold text-base tracking-tight text-on-surface leading-tight">WanderAI</span>
+<span class="text-[10px] font-bold tracking-widest text-primary uppercase">Ollama • Google Maps</span>
+</div>
+</div>
+<!-- Navigation Links -->
+<nav class="hidden md:flex items-center space-x-7 text-sm font-semibold text-on-surface-variant">
+<a class="text-primary font-bold transition-colors" href="#discover">Discover</a>
+<a class="hover:text-on-surface transition-colors" href="#saved">Saved Places</a>
+<a class="hover:text-on-surface transition-colors" href="#history">History</a>
+<a class="hover:text-on-surface transition-colors" href="#logs">Prompts Hub</a>
+</nav>
+<!-- System Connectivity Badges -->
+<div class="flex items-center space-x-2.5">
+<!-- Ollama Status Badge -->
+<div class="hidden sm:flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-primary-fixed/60 border border-primary-fixed text-primary text-xs font-semibold">
+<span class="w-2 h-2 rounded-full bg-primary pulse-dot"></span>
+<span>Ollama Llama-3.3</span>
+</div>
+<!-- Google Maps API Status Badge -->
+<div class="flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-surface-container border border-outline-variant/50 text-secondary text-xs font-semibold">
+<span class="w-2 h-2 rounded-full bg-secondary"></span>
+<span>Maps API Ready</span>
+</div>
+<!-- Settings / Config Button -->
+<button aria-label="Settings" class="p-2.5 rounded-full border border-outline-variant/60 bg-surface-container-lowest hover:bg-surface-container-low text-on-surface-variant transition shadow-subtle" type="button">
+<svg class="w-4 h-4" fill="none" stroke="currentColor" viewbox="0 0 24 24">
+<path d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path>
+<path d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path>
+</svg>
+</button>
+</div>
+</div>
+</header>
+<!-- END: SiteHeader -->
+<!-- BEGIN: MainContent -->
+<main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-9 sm:py-14">
+<!-- Hero Title & Subtext Section -->
+<section class="max-w-3xl mb-10">
+<div class="inline-flex items-center gap-2 mb-3.5 text-xs font-bold tracking-widest text-primary uppercase">
+<span class="inline-block w-4 h-0.5 bg-primary rounded-full"></span>
+        Ollama + Google Maps
+      </div>
+<h1 class="text-4xl sm:text-5xl lg:text-6xl text-on-surface font-extrabold tracking-tight leading-[1.1] mb-4">
+        Find your next place
+      </h1>
+<p class="text-base sm:text-lg text-on-surface-variant font-normal leading-relaxed">
+        Ask naturally, then explore each result and get directions on the map. Ollama synthesizes authentic local spots and Google Maps prepares turn-by-turn routing.
+      </p>
+</section>
+<!-- Query Box & Route Parameters Panel -->
+<section class="bg-surface-container-lowest rounded-3xl p-6 sm:p-8 shadow-elevated border border-outline-variant/40 mb-12">
+<form class="space-y-5" onsubmit="event.preventDefault();">
+<!-- Primary Natural Language Search Input -->
+<div class="relative">
+<label class="block text-xs font-bold text-on-surface-variant uppercase tracking-wider mb-2.5" for="discovery-query">
+            Where should I go or eat?
+          </label>
+<div class="relative">
+<textarea class="w-full text-base sm:text-lg text-on-surface placeholder:text-outline border border-outline-variant/70 rounded-2xl p-4 sm:p-5 focus:ring-2 focus:ring-primary focus:border-primary transition resize-none leading-relaxed bg-surface-container-low/40 font-sans" id="discovery-query" placeholder="Find cozy coffee shops in Bandung with outdoor seating and Wi-Fi for remote work..." rows="2"></textarea>
+<span class="absolute right-4 bottom-3.5 text-xs font-medium text-outline">⌘ + Enter to run</span>
+</div>
+</div>
+<!-- Route Origin & Filter Parameters Grid -->
+<div class="grid grid-cols-1 md:grid-cols-12 gap-3.5 pt-1 items-end">
+<!-- Starting Point -->
+<div class="md:col-span-5">
+<label class="block text-xs font-bold text-on-surface-variant mb-1.5" for="start-location">
+              Starting point (optional)
+            </label>
+<div class="relative flex items-center">
+<input class="w-full text-sm rounded-full border border-outline-variant/70 pl-10 pr-28 py-3 bg-surface-container-low/30 focus:ring-2 focus:ring-primary focus:border-primary font-medium text-on-surface" id="start-location" placeholder="e.g. Current location or hotel" type="text" value="Monas, Central Jakarta"/>
+<svg class="w-4 h-4 text-outline absolute left-3.5 pointer-events-none" fill="none" stroke="currentColor" viewbox="0 0 24 24">
+<circle cx="12" cy="12" r="3" stroke-width="2"></circle>
+<path d="M12 2v2m0 16v2m10-10h-2M4 12H2" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path>
+</svg>
+<!-- Geolocation Trigger Button -->
+<button class="absolute right-1.5 px-3 py-1.5 text-xs font-semibold rounded-full bg-surface-container hover:bg-surface-container-high text-primary transition flex items-center gap-1.5 border border-outline-variant/40" type="button">
+<svg class="w-3.5 h-3.5 text-primary" fill="currentColor" viewbox="0 0 20 20">
+<path clip-rule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" fill-rule="evenodd"></path>
+</svg>
+                Use GPS
+              </button>
+</div>
+</div>
+<!-- Travel Mode Dropdown -->
+<div class="md:col-span-3">
+<label class="block text-xs font-bold text-on-surface-variant mb-1.5" for="travel-mode">
+              Travel mode
+            </label>
+<div class="relative">
+<select class="w-full text-sm rounded-full border border-outline-variant/70 py-3 pl-4 pr-9 focus:ring-2 focus:ring-primary focus:border-primary bg-surface-container-low/30 text-on-surface font-semibold" id="travel-mode">
+<option selected="">Driving 🚗</option>
+<option>Transit / MRT 🚆</option>
+<option>Walking 🚶</option>
+<option>Motorcycle / Ride 🛵</option>
+</select>
+</div>
+</div>
+<!-- Search Action CTA Button -->
+<div class="md:col-span-4 flex items-center justify-end">
+<button class="w-full py-3.5 px-6 rounded-full bg-primary hover:bg-primary-container active:opacity-95 text-on-primary font-bold text-sm sm:text-base flex items-center justify-center gap-2 shadow-md shadow-primary/20 transition duration-150 cursor-pointer" onclick="document.getElementById('map-modal').classList.remove('hidden')" type="button">
+<svg class="w-4 h-4 text-primary-fixed" fill="currentColor" viewbox="0 0 24 24">
+<path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z"></path>
+</svg>
+<span>Find places</span>
+</button>
+</div>
+</div>
+<!-- Filter Tags / Badges -->
+<div class="pt-3 flex flex-wrap items-center gap-2 border-t border-surface-container-high mt-4 text-xs">
+<span class="text-on-surface-variant font-semibold mr-1">Suggested vibes:</span>
+<button class="px-3.5 py-1.5 rounded-full bg-surface-container-low hover:bg-surface-container text-on-surface font-medium border border-outline-variant/40 transition" type="button">
+            🌿 Quiet garden spaces
+          </button>
+<button class="px-3.5 py-1.5 rounded-full bg-surface-container-low hover:bg-surface-container text-on-surface font-medium border border-outline-variant/40 transition" type="button">
+            ⚡ High-speed Wi-Fi
+          </button>
+<button class="px-3.5 py-1.5 rounded-full bg-surface-container-low hover:bg-surface-container text-on-surface font-medium border border-outline-variant/40 transition" type="button">
+            ⭐ 4.5+ Rating
+          </button>
+<button class="px-3.5 py-1.5 rounded-full bg-surface-container-low hover:bg-surface-container text-on-surface font-medium border border-outline-variant/40 transition" type="button">
+            🕒 Open late night
+          </button>
+</div>
+</form>
+</section>
+<!-- Quick Prompt Ideas Section -->
+<section class="mb-14">
+<div class="flex items-center justify-between mb-4">
+<h2 class="text-xs font-bold uppercase tracking-wider text-on-surface-variant">Popular Inquiries for Ollama</h2>
+<span class="text-xs font-medium text-outline">Click to autofill query</span>
+</div>
+<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
+<!-- Prompt 1 -->
+<button class="text-left p-4 rounded-2xl bg-surface-container-lowest hover:bg-surface-container-low/60 border border-outline-variant/50 hover:border-primary/50 shadow-subtle hover:shadow-elevated transition group" type="button">
+<div class="flex items-start gap-3">
+<span class="text-2xl p-2 rounded-xl bg-surface-container-low">☕</span>
+<div>
+<p class="text-xs font-bold text-on-surface group-hover:text-primary transition">Bandung Work Cafés</p>
+<p class="text-[11px] text-on-surface-variant mt-1 leading-snug">"Cozy coffee shops with leafy garden seating &amp; great pour-overs"</p>
+</div>
+</div>
+</button>
+<!-- Prompt 2 -->
+<button class="text-left p-4 rounded-2xl bg-surface-container-lowest hover:bg-surface-container-low/60 border border-outline-variant/50 hover:border-primary/50 shadow-subtle hover:shadow-elevated transition group" type="button">
+<div class="flex items-start gap-3">
+<span class="text-2xl p-2 rounded-xl bg-surface-container-low">🍛</span>
+<div>
+<p class="text-xs font-bold text-on-surface group-hover:text-primary transition">Authentic Padang Cuisine</p>
+<p class="text-[11px] text-on-surface-variant mt-1 leading-snug">"Top-rated Rendang &amp; Gulai near Blok M South Jakarta"</p>
+</div>
+</div>
+</button>
+<!-- Prompt 3 -->
+<button class="text-left p-4 rounded-2xl bg-surface-container-lowest hover:bg-surface-container-low/60 border border-outline-variant/50 hover:border-primary/50 shadow-subtle hover:shadow-elevated transition group" type="button">
+<div class="flex items-start gap-3">
+<span class="text-2xl p-2 rounded-xl bg-surface-container-low">🌿</span>
+<div>
+<p class="text-xs font-bold text-on-surface group-hover:text-primary transition">Quiet Green Parks</p>
+<p class="text-[11px] text-on-surface-variant mt-1 leading-snug">"Shaded open spaces for reading a book on Sunday morning"</p>
+</div>
+</div>
+</button>
+<!-- Prompt 4 -->
+<button class="text-left p-4 rounded-2xl bg-surface-container-lowest hover:bg-surface-container-low/60 border border-outline-variant/50 hover:border-primary/50 shadow-subtle hover:shadow-elevated transition group" type="button">
+<div class="flex items-start gap-3">
+<span class="text-2xl p-2 rounded-xl bg-surface-container-low">🍜</span>
+<div>
+<p class="text-xs font-bold text-on-surface group-hover:text-primary transition">Menteng Street Eats</p>
+<p class="text-[11px] text-on-surface-variant mt-1 leading-snug">"Legendary midnight Nasi Gila &amp; Sate spots with quick parking"</p>
+</div>
+</div>
+</button>
+</div>
+</section>
+<!-- Recommendation Places Section (AI Results) -->
+<section>
+<div class="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-outline-variant/40 mb-7 gap-2">
+<div>
+<h2 class="text-2xl sm:text-3xl text-on-surface font-extrabold tracking-tight">Recommended for you</h2>
+<p class="text-xs text-on-surface-variant mt-1 font-medium">Synthesized from 42 local reviews &amp; validated via Google Places API</p>
+</div>
+<div class="flex items-center gap-2">
+<span class="text-xs text-on-surface-variant font-bold">Sort by:</span>
+<select class="text-xs font-semibold border-outline-variant/70 rounded-full py-2 px-3.5 bg-surface-container-lowest text-on-surface focus:ring-primary">
+<option>Highest AI Relevance</option>
+<option>Shortest Distance</option>
+<option>Rating (High to Low)</option>
+</select>
+</div>
+</div>
+<!-- Places Cards Grid -->
+<div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+<!-- Place Card 1 (Active / Target in Modal) -->
+<article class="bg-surface-container-lowest rounded-3xl border border-outline-variant/50 overflow-hidden shadow-subtle hover:shadow-elevated transition flex flex-col justify-between group">
+<div>
+<!-- Card Image -->
+<div class="relative h-52 bg-surface-container-high overflow-hidden">
+<img alt="Blue Terrace Artisan Cafe interior with wooden table and plants" class="w-full h-full object-cover group-hover:scale-105 transition duration-300" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBxhxYW0fwUwSNH6iHStS5-goqyqPnBy1FBgGVJBfhSyu-pnFvqHFpvdO3I9Nfoz7ebyHT-f0m9FOcCtJKprt6T5ewsMJtReivW24gMHbiiQbPDVGAjvwExgp0bncp8kJwfExc3cMNZBlcM7ZjX10YNctdWogt13uweifKy4a-PrVHYkKM19XDy8AM1hHvflI9XjuXuwk4z4OMH3akm_iZvvwC1cJiEai4TShjrzdiYwzYP9hc01CQoLA"/>
+<div class="absolute top-3.5 left-3.5 bg-surface-container-lowest/90 backdrop-blur-md px-3 py-1 rounded-full text-[11px] font-bold text-primary shadow-xs">
+                Top Pick • 98% Match
+              </div>
+<div class="absolute bottom-3.5 right-3.5 bg-inverse-surface/85 backdrop-blur-md text-inverse-on-surface px-3 py-1 rounded-full text-xs font-semibold shadow-xs">
+                18 mins drive
+              </div>
+</div>
+<!-- Card Body Content -->
+<div class="p-6">
+<div class="flex items-center justify-between text-xs text-on-surface-variant font-medium mb-1.5">
+<span>Specialty Coffee • Bakery</span>
+<span class="text-primary font-bold">Open until 22:00</span>
+</div>
+<h3 class="text-xl font-bold text-on-surface mb-1.5">Blue Terrace Artisan Café</h3>
+<!-- Review Rating -->
+<div class="flex items-center gap-1.5 text-xs mb-3.5">
+<div class="flex text-amber-500">
+<span>★</span><span>★</span><span>★</span><span>★</span><span class="text-amber-300">★</span>
+</div>
+<span class="font-bold text-on-surface">4.8</span>
+<span class="text-outline font-medium">(1,240 Google reviews)</span>
+</div>
+<!-- Ollama Rationale Box -->
+<div class="bg-surface-container-low rounded-2xl p-3.5 mb-4 border border-outline-variant/30">
+<div class="flex items-center gap-1.5 text-[11px] font-extrabold text-primary uppercase tracking-wide mb-1">
+<svg class="w-3.5 h-3.5 text-primary" fill="currentColor" viewbox="0 0 20 20">
+<path d="M10 2a8 8 0 100 16 8 8 0 000-16zm1 11H9v-2h2v2zm0-4H9V5h2v4z"></path>
+</svg>
+                  Why Ollama Picked This
+                </div>
+<p class="text-xs text-on-surface-variant leading-relaxed">
+                  Quiet courtyard with reliable 120 Mbps fiber Wi-Fi, power outlets at every booth, and ethically sourced single-origin Gayo beans.
+                </p>
+</div>
+<div class="text-xs text-on-surface-variant flex items-center gap-1.5 mb-2">
+<svg class="w-3.5 h-3.5 text-outline shrink-0" fill="none" stroke="currentColor" viewbox="0 0 24 24">
+<path d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path>
+<path d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path>
+</svg>
+<span class="truncate">Jl. Cikini Raya No. 45, Menteng (6.4 km from Monas)</span>
+</div>
+</div>
+</div>
+<!-- Card Footer Action -->
+<div class="px-6 pb-6 pt-0">
+<button class="w-full py-3 px-4 rounded-full border-2 border-primary text-primary hover:bg-primary hover:text-on-primary font-bold text-xs sm:text-sm flex items-center justify-center gap-2 transition" onclick="document.getElementById('map-modal').classList.remove('hidden')" type="button">
+<svg class="w-4 h-4" fill="none" stroke="currentColor" viewbox="0 0 24 24">
+<path d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path>
+</svg>
+<span>View Interactive Route &amp; Map</span>
+</button>
+</div>
+</article>
+<!-- Place Card 2 -->
+<article class="bg-surface-container-lowest rounded-3xl border border-outline-variant/50 overflow-hidden shadow-subtle hover:shadow-elevated transition flex flex-col justify-between group">
+<div>
+<div class="relative h-52 bg-surface-container-high overflow-hidden">
+<img alt="Traditional Padang spread banquet on a long wooden table" class="w-full h-full object-cover group-hover:scale-105 transition duration-300" src="https://lh3.googleusercontent.com/aida-public/AB6AXuA2s3CSFDVnFa5TEtlA1Sg2MOkB2Lg17aiKzGFrxOL52k_3rOpYjG6FsVBKee-e4KhIHZxBmfx0X25kPTv_KL7xbwTI0uJ70VxtLc1yr6tHaG_mNoS1uKHbBeoPAmFzoUwdC-BARLKN1NIDus6msTEs4OTsRBgSu4XHXEJCv8x9bfgTshTT64TatIyAloZ2kIphWcgRqLXfUWP1NXA2676WlQ6_DIU1TwVDWe0Gr-XCaNnPuW0vqtIecA"/>
+<div class="absolute top-3.5 left-3.5 bg-surface-container-lowest/90 backdrop-blur-md px-3 py-1 rounded-full text-[11px] font-bold text-on-surface shadow-xs">
+                Iconic Flavors
+              </div>
+<div class="absolute bottom-3.5 right-3.5 bg-inverse-surface/85 backdrop-blur-md text-inverse-on-surface px-3 py-1 rounded-full text-xs font-semibold shadow-xs">
+                26 mins drive
+              </div>
+</div>
+<div class="p-6">
+<div class="flex items-center justify-between text-xs text-on-surface-variant font-medium mb-1.5">
+<span>Authentic Minang Cuisine</span>
+<span class="text-primary font-bold">Open until 23:00</span>
+</div>
+<h3 class="text-xl font-bold text-on-surface mb-1.5">Pagi Sore Heritage Blok M</h3>
+<div class="flex items-center gap-1.5 text-xs mb-3.5">
+<div class="flex text-amber-500">
+<span>★</span><span>★</span><span>★</span><span>★</span><span class="text-amber-400">★</span>
+</div>
+<span class="font-bold text-on-surface">4.9</span>
+<span class="text-outline font-medium">(4,820 Google reviews)</span>
+</div>
+<div class="bg-surface-container-low rounded-2xl p-3.5 mb-4 border border-outline-variant/30">
+<div class="flex items-center gap-1.5 text-[11px] font-extrabold text-primary uppercase tracking-wide mb-1">
+<svg class="w-3.5 h-3.5 text-primary" fill="currentColor" viewbox="0 0 20 20">
+<path d="M10 2a8 8 0 100 16 8 8 0 000-16zm1 11H9v-2h2v2zm0-4H9V5h2v4z"></path>
+</svg>
+                  Why Ollama Picked This
+                </div>
+<p class="text-xs text-on-surface-variant leading-relaxed">
+                  Unrivaled tender slow-cooked Rendang Daging and crispy Ayam Goreng Kremes. Spacious dining rooms with ample valet parking.
+                </p>
+</div>
+<div class="text-xs text-on-surface-variant flex items-center gap-1.5 mb-2">
+<svg class="w-3.5 h-3.5 text-outline shrink-0" fill="none" stroke="currentColor" viewbox="0 0 24 24">
+<path d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path>
+<path d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path>
+</svg>
+<span class="truncate">Jl. Melawai IV No. 1, Kebayoran Baru (9.8 km from Monas)</span>
+</div>
+</div>
+</div>
+<div class="px-6 pb-6 pt-0">
+<button class="w-full py-3 px-4 rounded-full border border-outline-variant/80 text-on-surface hover:border-primary hover:text-primary font-bold text-xs sm:text-sm flex items-center justify-center gap-2 transition" onclick="document.getElementById('map-modal').classList.remove('hidden')" type="button">
+<svg class="w-4 h-4" fill="none" stroke="currentColor" viewbox="0 0 24 24">
+<path d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path>
+</svg>
+<span>View Route &amp; Directions</span>
+</button>
+</div>
+</article>
+<!-- Place Card 3 -->
+<article class="bg-surface-container-lowest rounded-3xl border border-outline-variant/50 overflow-hidden shadow-subtle hover:shadow-elevated transition flex flex-col justify-between group">
+<div>
+<div class="relative h-52 bg-surface-container-high overflow-hidden">
+<img alt="Green park with leafy tall trees and paved walking path" class="w-full h-full object-cover group-hover:scale-105 transition duration-300" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDh3SdrAmGy4feEnegRKUP2D1Pu1JlfeeeiukGBdhUIDwqlXSanR-LCHIEGvjM7DdeG9XqFcoU_nO05eUiVjwbbWXW2JT_scdcE5Hx2LsqfFehPDM6JbOCJgWJjH6qCUAV2doqLlH0NPqLLQ0J3OnGY9sxRLyr16-rO4YUANA1x5YVvW7xhsukzVZ8yGBGDOWRs76xoHoMKfIaDrdN6fgJflwx_S1jOzhaceglaWTCjjxQdHHAhZzqTHQ"/>
+<div class="absolute top-3.5 left-3.5 bg-surface-container-lowest/90 backdrop-blur-md px-3 py-1 rounded-full text-[11px] font-bold text-on-surface shadow-xs">
+                Outdoor Sanctuary
+              </div>
+<div class="absolute bottom-3.5 right-3.5 bg-inverse-surface/85 backdrop-blur-md text-inverse-on-surface px-3 py-1 rounded-full text-xs font-semibold shadow-xs">
+                12 mins drive
+              </div>
+</div>
+<div class="p-6">
+<div class="flex items-center justify-between text-xs text-on-surface-variant font-medium mb-1.5">
+<span>Public Park • Nature Walk</span>
+<span class="text-primary font-bold">Open 24 Hours</span>
+</div>
+<h3 class="text-xl font-bold text-on-surface mb-1.5">Taman Suropati Pavilion</h3>
+<div class="flex items-center gap-1.5 text-xs mb-3.5">
+<div class="flex text-amber-500">
+<span>★</span><span>★</span><span>★</span><span>★</span><span class="text-amber-400">★</span>
+</div>
+<span class="font-bold text-on-surface">4.7</span>
+<span class="text-outline font-medium">(6,150 Google reviews)</span>
+</div>
+<div class="bg-surface-container-low rounded-2xl p-3.5 mb-4 border border-outline-variant/30">
+<div class="flex items-center gap-1.5 text-[11px] font-extrabold text-primary uppercase tracking-wide mb-1">
+<svg class="w-3.5 h-3.5 text-primary" fill="currentColor" viewbox="0 0 20 20">
+<path d="M10 2a8 8 0 100 16 8 8 0 000-16zm1 11H9v-2h2v2zm0-4H9V5h2v4z"></path>
+</svg>
+                  Why Ollama Picked This
+                </div>
+<p class="text-xs text-on-surface-variant leading-relaxed">
+                  Lush century-old canopy trees, street violinists in the late afternoon, and close proximity to small artisanal ice cream vendors.
+                </p>
+</div>
+<div class="text-xs text-on-surface-variant flex items-center gap-1.5 mb-2">
+<svg class="w-3.5 h-3.5 text-outline shrink-0" fill="none" stroke="currentColor" viewbox="0 0 24 24">
+<path d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path>
+<path d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path>
+</svg>
+<span class="truncate">Jl. Taman Suropati No.5, Menteng (4.1 km from Monas)</span>
+</div>
+</div>
+</div>
+<div class="px-6 pb-6 pt-0">
+<button class="w-full py-3 px-4 rounded-full border border-outline-variant/80 text-on-surface hover:border-primary hover:text-primary font-bold text-xs sm:text-sm flex items-center justify-center gap-2 transition" onclick="document.getElementById('map-modal').classList.remove('hidden')" type="button">
+<svg class="w-4 h-4" fill="none" stroke="currentColor" viewbox="0 0 24 24">
+<path d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path>
+</svg>
+<span>View Route &amp; Directions</span>
+</button>
+</div>
+</article>
+</div>
+</section>
+</main>
+<!-- END: MainContent -->
+<!-- BEGIN: GoogleMapsModalOverlay -->
+<aside aria-modal="true" class="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-on-background/60 backdrop-blur-sm transition-all" id="map-modal" role="dialog">
+<!-- Modal Dialog Window Container -->
+<div class="bg-surface-container-lowest w-full max-w-6xl h-[90vh] max-h-[820px] rounded-3xl shadow-modal border border-outline-variant/40 flex flex-col overflow-hidden animate-in fade-in zoom-in duration-200">
+<!-- Modal Top Bar -->
+<div class="px-6 py-4 border-b border-outline-variant/40 bg-surface-container-low/60 flex items-center justify-between shrink-0">
+<div class="flex items-center space-x-3.5 overflow-hidden">
+<div class="w-9 h-9 rounded-2xl bg-primary-fixed text-on-primary-fixed flex items-center justify-center shrink-0">
+<svg class="w-4.5 h-4.5" fill="currentColor" viewbox="0 0 20 20">
+<path clip-rule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" fill-rule="evenodd"></path>
+</svg>
+</div>
+<div class="truncate">
+<div class="flex items-center gap-2.5">
+<h2 class="font-bold text-sm text-on-surface truncate">Monas → Blue Terrace Artisan Café</h2>
+<span class="hidden sm:inline-block px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-primary-fixed/80 text-primary">
+                Fastest Route Available
+              </span>
+</div>
+<p class="text-xs text-on-surface-variant truncate font-medium">18 mins (6.4 km) • via Jl. M.H. Thamrin and Jl. Medan Merdeka Barat • Light traffic</p>
+</div>
+</div>
+<!-- Controls: Map Actions & Close -->
+<div class="flex items-center space-x-2 shrink-0">
+<a class="hidden md:inline-flex items-center gap-1.5 px-4 py-2 text-xs font-bold rounded-full bg-surface-container-lowest border border-outline-variant/70 text-on-surface hover:bg-surface-container-low transition shadow-subtle" href="https://maps.google.com" rel="noreferrer" target="_blank">
+<span>Open in Google Maps</span>
+<svg class="w-3.5 h-3.5 text-outline" fill="none" stroke="currentColor" viewbox="0 0 24 24">
+<path d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path>
+</svg>
+</a>
+<button aria-label="Close modal" class="p-2 rounded-full text-outline hover:text-on-surface hover:bg-surface-container transition" onclick="document.getElementById('map-modal').classList.add('hidden')" type="button">
+<svg class="w-5 h-5" fill="none" stroke="currentColor" viewbox="0 0 24 24">
+<path d="M6 18L18 6M6 6l12 12" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path>
+</svg>
+</button>
+</div>
+</div>
+<!-- Modal Main Split View: Left Map View Canvas / Right Details Panel -->
+<div class="flex-1 grid grid-cols-1 lg:grid-cols-12 min-h-0">
+<!-- Interactive Vector Map Canvas Simulation (Col 8) -->
+<div class="lg:col-span-8 relative map-grid-bg overflow-hidden flex flex-col justify-between p-4">
+<!-- Mock Map Overlay Visual Graphic Elements -->
+<svg class="absolute inset-0 w-full h-full pointer-events-none" xmlns="http://www.w3.org/2000/svg">
+<defs>
+<lineargradient id="routeGradient" x1="0%" x2="100%" y1="0%" y2="100%">
+<stop offset="0%" stop-color="#476177"></stop>
+<stop offset="100%" stop-color="#1c463c"></stop>
+</lineargradient>
+<filter height="140%" id="routeShadow" width="140%" x="-10%" y="-10%">
+<fedropshadow dx="0" dy="4" flood-color="#1c463c" flood-opacity="0.25" stddeviation="4"></fedropshadow>
+</filter>
+</defs>
+<!-- Major Simulated Arterial Roads -->
+<path d="M-50,220 C200,220 350,180 850,260" fill="none" stroke="#ffffff" stroke-width="14"></path>
+<path d="M-50,220 C200,220 350,180 850,260" fill="none" stroke="#fef08a" stroke-width="9"></path>
+<path d="M300,-50 C310,250 380,450 420,800" fill="none" stroke="#ffffff" stroke-width="16"></path>
+<path d="M300,-50 C310,250 380,450 420,800" fill="none" stroke="#fef08a" stroke-width="11"></path>
+<path d="M120,600 C300,520 540,400 800,420" fill="none" stroke="#ffffff" stroke-width="10"></path>
+<!-- Simulated Green Zone / Park Area -->
+<rect fill="#bfecdd" height="150" opacity="0.6" rx="24" width="180" x="80" y="80"></rect>
+<text fill="#1c463c" font-family="'Plus Jakarta Sans', sans-serif" font-size="12" font-weight="700" x="120" y="160">Medan Merdeka</text>
+<!-- Calculated Active Route Polyline -->
+<path d="M 180,180 L 260,200 L 310,220 L 330,340 L 460,390 L 520,380" fill="none" filter="url(#routeShadow)" stroke="url(#routeGradient)" stroke-linecap="round" stroke-linejoin="round" stroke-width="7"></path>
+<!-- Route Secondary Alternative Path (Dotted) -->
+<path d="M 180,180 L 190,300 L 320,350 L 460,390" fill="none" stroke="#717975" stroke-dasharray="6,6" stroke-linecap="round" stroke-width="5"></path>
+</svg>
+<!-- Origin Pin Marker: Monas (A) -->
+<div class="absolute left-[162px] top-[148px] -translate-x-1/2 -translate-y-full flex flex-col items-center pointer-events-auto cursor-pointer group">
+<div class="bg-on-background text-surface-container-lowest text-[11px] font-bold px-3 py-1 rounded-full shadow-lg mb-1.5 whitespace-nowrap">
+              Origin: Monas
+            </div>
+<div class="w-8 h-8 rounded-full bg-on-background border-2 border-surface-container-lowest text-surface-container-lowest flex items-center justify-center font-bold text-xs shadow-md">
+              A
+            </div>
+</div>
+<!-- Destination Pin Marker: Cafe (B) -->
+<div class="absolute left-[520px] top-[380px] -translate-x-1/2 -translate-y-full flex flex-col items-center pointer-events-auto cursor-pointer">
+<!-- Place Floating Info Card Tooltip -->
+<div class="bg-surface-container-lowest border border-outline-variant/50 rounded-2xl shadow-elevated p-3 mb-2.5 w-56 pointer-events-auto transition">
+<div class="flex items-center gap-2 mb-1">
+<span class="w-2.5 h-2.5 rounded-full bg-primary"></span>
+<span class="text-xs font-bold text-on-surface truncate">Blue Terrace Café</span>
+</div>
+<p class="text-[11px] text-on-surface-variant leading-tight mb-2">Jl. Cikini Raya • 4.8 ★</p>
+<div class="flex items-center justify-between text-[10px] text-primary font-bold bg-primary-fixed/40 px-2.5 py-1 rounded-full">
+<span>Arrival: ~18 min</span>
+<span>Open now</span>
+</div>
+</div>
+<!-- Destination Pin -->
+<div class="relative">
+<div class="w-8 h-8 rounded-full bg-tertiary-container border-2 border-surface-container-lowest text-on-primary flex items-center justify-center font-bold text-xs shadow-lg">
+<svg class="w-4 h-4" fill="currentColor" viewbox="0 0 20 20">
+<path clip-rule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" fill-rule="evenodd"></path>
+</svg>
+</div>
+<span class="absolute -bottom-1 left-1/2 -translate-x-1/2 w-2.5 h-1 bg-on-background/20 rounded-full blur-[1px]"></span>
+</div>
+</div>
+<!-- Map Top Controls -->
+<div class="relative z-10 flex items-center justify-between">
+<div class="flex items-center bg-surface-container-lowest/95 backdrop-blur-md rounded-full p-1 border border-outline-variant/50 shadow-subtle text-xs font-semibold text-on-surface-variant">
+<button class="px-3 py-1 rounded-full bg-surface-container font-bold text-on-surface shadow-xs">Map</button>
+<button class="px-3 py-1 rounded-full hover:bg-surface-container-low text-on-surface-variant">Satellite</button>
+<button class="px-3 py-1 rounded-full hover:bg-surface-container-low text-on-surface-variant">Terrain</button>
+</div>
+<!-- Live Traffic Indicator Pill -->
+<div class="bg-surface-container-lowest/95 backdrop-blur-md px-3.5 py-1.5 rounded-full border border-outline-variant/50 text-xs font-bold text-primary flex items-center gap-2 shadow-subtle">
+<span class="w-2 h-2 rounded-full bg-primary"></span>
+<span>Fastest route: No toll delays</span>
+</div>
+</div>
+<!-- Map Bottom Controls -->
+<div class="relative z-10 flex items-end justify-between">
+<div class="bg-surface-container-lowest/95 backdrop-blur-md px-3 py-1 rounded-full text-[10px] text-on-surface-variant font-medium border border-outline-variant/40">
+              Google Maps • Map data ©2025
+            </div>
+<div class="flex flex-col space-y-1.5">
+<button class="w-8 h-8 rounded-full bg-surface-container-lowest shadow-md border border-outline-variant/50 flex items-center justify-center text-on-surface hover:bg-surface-container-low font-bold text-sm" title="Zoom In">+</button>
+<button class="w-8 h-8 rounded-full bg-surface-container-lowest shadow-md border border-outline-variant/50 flex items-center justify-center text-on-surface hover:bg-surface-container-low font-bold text-sm" title="Zoom Out">−</button>
+<button class="w-8 h-8 rounded-full bg-surface-container-lowest shadow-md border border-outline-variant/50 flex items-center justify-center text-tertiary hover:bg-surface-container-low" title="Street View Pegman">
+<svg class="w-4 h-4" fill="currentColor" viewbox="0 0 20 20">
+<path clip-rule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" fill-rule="evenodd"></path>
+</svg>
+</button>
+</div>
+</div>
+</div>
+<!-- Place Detailed Inspection & Directions Column (Col 4) -->
+<div class="lg:col-span-4 border-t lg:border-t-0 lg:border-l border-outline-variant/40 bg-surface-container-lowest flex flex-col justify-between overflow-y-auto">
+<div class="p-6 space-y-5">
+<!-- Mini Cover & Tags -->
+<div>
+<div class="flex items-center gap-1.5 text-[11px] font-bold text-primary uppercase tracking-wider mb-1">
+<span>Verified by Google Places API</span>
+</div>
+<h3 class="text-2xl font-extrabold text-on-surface">Blue Terrace Artisan Café</h3>
+<p class="text-xs text-on-surface-variant mt-0.5 font-medium">Specialty Coffee, Brunch &amp; Quiet Workspaces</p>
+</div>
+<!-- Route Stats Card -->
+<div class="grid grid-cols-3 gap-2 bg-surface-container-low/70 p-3.5 rounded-2xl border border-outline-variant/40 text-center">
+<div>
+<div class="text-[10px] uppercase font-bold text-on-surface-variant">Duration</div>
+<div class="text-base font-extrabold text-primary">18 min</div>
+</div>
+<div class="border-x border-outline-variant/50">
+<div class="text-[10px] uppercase font-bold text-on-surface-variant">Distance</div>
+<div class="text-base font-extrabold text-on-surface">6.4 km</div>
+</div>
+<div>
+<div class="text-[10px] uppercase font-bold text-on-surface-variant">Mode</div>
+<div class="text-base font-extrabold text-on-surface">Driving 🚗</div>
+</div>
+</div>
+<!-- Turn-by-Turn Route Preview Steps -->
+<div>
+<h4 class="text-xs font-bold uppercase tracking-wider text-on-surface-variant mb-3">Turn-by-turn Preview</h4>
+<ol class="space-y-3 text-xs text-on-surface-variant font-medium">
+<li class="flex items-start gap-3">
+<span class="w-5 h-5 rounded-full bg-surface-container border border-outline-variant/50 text-on-surface flex items-center justify-center shrink-0 font-bold text-[10px]">1</span>
+<span>Head south on <strong class="text-on-surface font-semibold">Jl. Medan Merdeka Barat</strong> toward Jl. Kebon Sirih (1.2 km)</span>
+</li>
+<li class="flex items-start gap-3">
+<span class="w-5 h-5 rounded-full bg-surface-container border border-outline-variant/50 text-on-surface flex items-center justify-center shrink-0 font-bold text-[10px]">2</span>
+<span>Turn left onto <strong class="text-on-surface font-semibold">Jl. M.H. Thamrin</strong> and stay in right lane (2.1 km)</span>
+</li>
+<li class="flex items-start gap-3">
+<span class="w-5 h-5 rounded-full bg-surface-container border border-outline-variant/50 text-on-surface flex items-center justify-center shrink-0 font-bold text-[10px]">3</span>
+<span>Continue onto <strong class="text-on-surface font-semibold">Jl. Cikini Raya</strong>; destination will be on the right (3.1 km)</span>
+</li>
+</ol>
+</div>
+<!-- Ollama Context Reason -->
+<div class="border-t border-outline-variant/30 pt-4">
+<h4 class="text-xs font-bold text-on-surface mb-2 flex items-center gap-1.5">
+<span class="text-sm">💡</span> Local Insider Note
+              </h4>
+<p class="text-xs text-on-surface-variant leading-relaxed bg-surface-container-low/70 p-3 rounded-2xl border border-outline-variant/40">
+                "Quiet mornings before 11:30 AM are ideal for calls. Ample motorcycle parking in front, valet car service available for Rp 20,000."
+              </p>
+</div>
+<!-- Operating Hours & Contact Quick Info -->
+<div class="space-y-2 text-xs text-on-surface-variant pt-1 font-medium">
+<div class="flex justify-between py-1 border-b border-surface-container-high">
+<span class="text-outline">Today's Hours</span>
+<span class="font-bold text-on-surface">07:30 AM – 10:00 PM</span>
+</div>
+<div class="flex justify-between py-1 border-b border-surface-container-high">
+<span class="text-outline">Phone</span>
+<span class="font-bold text-on-surface">+62 21 3192 4890</span>
+</div>
+<div class="flex justify-between py-1">
+<span class="text-outline">Price Range</span>
+<span class="font-bold text-on-surface">$$ (Rp 35k - 85k / item)</span>
+</div>
+</div>
+</div>
+<!-- Bottom CTA inside Sidebar -->
+<div class="p-5 bg-surface-container-low/50 border-t border-outline-variant/40 space-y-2.5">
+<a class="w-full py-3.5 px-5 rounded-full bg-primary hover:bg-primary-container text-on-primary font-bold text-xs sm:text-sm flex items-center justify-center gap-2 shadow-sm transition" href="https://maps.google.com" rel="noreferrer" target="_blank">
+<svg class="w-4 h-4" fill="none" stroke="currentColor" viewbox="0 0 24 24">
+<path d="M13 7l5 5m0 0l-5 5m5-5H6" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path>
+</svg>
+<span>Start Navigation in Google Maps</span>
+</a>
+<button class="w-full py-2 text-xs font-bold text-on-surface-variant hover:text-on-surface transition" onclick="document.getElementById('map-modal').classList.add('hidden')" type="button">
+              Close Preview
+            </button>
+</div>
+</div>
+</div>
+</div>
+</aside>
+<!-- END: GoogleMapsModalOverlay -->
+<!-- BEGIN: SiteFooter -->
+<footer class="border-t border-outline-variant/40 bg-surface-container-low/40 mt-20 py-8 text-xs text-on-surface-variant">
+<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-4">
+<div class="flex items-center space-x-2">
+<span class="font-bold text-on-surface">WanderAI</span>
+<span>•</span>
+<span>Local intelligence orchestrated by local LLM Ollama &amp; Google Maps Geocoding</span>
+</div>
+<div class="flex items-center space-x-5 font-semibold">
+<a class="hover:text-primary transition" href="#privacy">Privacy</a>
+<a class="hover:text-primary transition" href="#terms">Terms of Service</a>
+<a class="hover:text-primary transition" href="#apidocs">API Documentation</a>
+</div>
+</div>
+</footer>
+<!-- END: SiteFooter -->
+<!-- Interactive JavaScript Behavior -->
+<script data-purpose="modal-and-chips-controller">
+    document.querySelectorAll('button').forEach(btn => {
+      if (btn.innerText.includes('Bandung Work Cafés')) {
+        btn.addEventListener('click', () => {
+          const textarea = document.getElementById('discovery-query');
+          textarea.value = "Find cozy coffee shops in Bandung with outdoor seating and Wi-Fi for remote work...";
+          textarea.focus();
+        });
+      } else if (btn.innerText.includes('Authentic Padang Cuisine')) {
+        btn.addEventListener('click', () => {
+          const textarea = document.getElementById('discovery-query');
+          textarea.value = "Where can I eat authentic and best Padang food near Blok M with legendary rendang?";
+          textarea.focus();
+        });
+      }
+    });
+
+    window.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        const modal = document.getElementById('map-modal');
+        if (modal && !modal.classList.contains('hidden')) {
+          modal.classList.add('hidden');
+        }
+      }
+    });
+  </script>
+</body></html>

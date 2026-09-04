@@ -1,0 +1,32 @@
+services:
+  maps-api:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      OLLAMA_BASE_URL: http://host.docker.internal:11434
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    ports:
+      - "8001:8001"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8001/health')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  open-webui:
+    image: ghcr.io/open-webui/open-webui:main
+    profiles: ["open-webui"]
+    restart: unless-stopped
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      OLLAMA_BASE_URL: http://host.docker.internal:11434
+    volumes:
+      - open-webui-data:/app/backend/data
+    ports:
+      - "3000:8080"
+
+volumes:
+  open-webui-data:

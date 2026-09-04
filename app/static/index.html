@@ -1,0 +1,346 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="referrer" content="strict-origin-when-cross-origin">
+    <meta name="theme-color" content="#f6f9ff">
+    <title>WanderAI · Local place discovery</title>
+    <link rel="stylesheet" href="/static/styles.css">
+  </head>
+  <body>
+    <a class="skip-link" href="#discovery">Skip to search</a>
+
+    <header class="site-header">
+      <div class="nav-shell">
+        <a class="brand" href="/" aria-label="WanderAI home">
+          <span class="brand-mark" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none">
+              <circle cx="12" cy="12" r="8.5" stroke="currentColor" stroke-width="1.7"></circle>
+              <path d="m13.9 7.8-2.1 4.1-4.1 2.2 4.6.1 1.6 2.1.2-4.5 2.2-4-2.4-.1Z" fill="currentColor"></path>
+            </svg>
+          </span>
+          <span>
+            <strong>WanderAI</strong>
+            <small>Local discovery</small>
+          </span>
+        </a>
+
+        <nav class="nav-links" aria-label="Primary navigation">
+          <a class="active" href="#discovery">Discover</a>
+          <a href="/docs" target="_blank" rel="noopener noreferrer">API docs</a>
+        </nav>
+
+        <div class="service-status" aria-label="Service availability">
+          <span id="ollama-status" class="service-badge checking" title="Checking the local model">
+            <span class="status-dot"></span>
+            <span class="service-copy"><span>Local model</span><strong>Checking</strong></span>
+          </span>
+          <span id="maps-status" class="service-badge checking" title="Checking Google Maps configuration">
+            <span class="status-dot"></span>
+            <span class="service-copy"><span>Google Maps</span><strong>Checking</strong></span>
+          </span>
+        </div>
+      </div>
+    </header>
+
+    <main id="discovery" class="page-shell">
+      <section class="hero" aria-labelledby="hero-title">
+        <p class="eyebrow"><span></span> Qwen + Google Places</p>
+        <h1 id="hero-title">Find a place that<br><em>fits the moment.</em></h1>
+        <p class="hero-copy">
+          Describe what you need in your own words. Your local model understands the request,
+          and Google Places grounds every recommendation in real location data.
+        </p>
+      </section>
+
+      <section class="search-panel" aria-label="Place search">
+        <form id="chat-form">
+          <div class="query-field">
+            <div class="field-heading">
+              <label for="message">Where should I go?</label>
+              <span id="message-count">0 / 4000</span>
+            </div>
+            <textarea
+              id="message"
+              required
+              maxlength="4000"
+              rows="2"
+              placeholder="Try: A quiet coffee shop in Bandung with outdoor seating…"
+            ></textarea>
+            <span class="key-hint"><kbd>Ctrl</kbd> + <kbd>Enter</kbd></span>
+          </div>
+
+          <div class="route-options">
+            <label class="control-group control-origin" for="origin">
+              <span class="control-label">Starting point <small>optional</small></span>
+              <span class="input-with-action">
+                <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <path d="M12 21s6-5.2 6-11a6 6 0 1 0-12 0c0 5.8 6 11 6 11Z" stroke="currentColor" stroke-width="1.7"></path>
+                  <circle cx="12" cy="10" r="2" stroke="currentColor" stroke-width="1.7"></circle>
+                </svg>
+                <input id="origin" maxlength="250" placeholder="Monas, Jakarta">
+                <button id="locate" class="inline-button" type="button" title="Use browser location">Use my location</button>
+              </span>
+            </label>
+
+            <label class="control-group" for="travel-mode">
+              <span class="control-label">Travel mode</span>
+              <span class="select-wrap">
+                <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <path d="M5 17h14M7 17l1-7h8l1 7M9 10l1-3h4l1 3M8 20h.01M16 20h.01" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"></path>
+                </svg>
+                <select id="travel-mode">
+                  <option value="driving">Driving</option>
+                  <option value="walking">Walking</option>
+                  <option value="bicycling">Bicycling</option>
+                  <option value="transit">Transit</option>
+                </select>
+              </span>
+            </label>
+
+            <button id="send" class="primary-button" type="submit">
+              <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <path d="m14 5 5 7-5 7M19 12H5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path>
+              </svg>
+              <span>Find places</span>
+            </button>
+          </div>
+
+          <details id="api-key-wrap" class="access-settings" hidden>
+            <summary>Connect to this protected assistant</summary>
+            <label for="api-key">Backend access key</label>
+            <input id="api-key" type="password" autocomplete="off" placeholder="Enter APP_API_KEY">
+            <p>Stored only for this browser tab.</p>
+          </details>
+        </form>
+
+        <div class="prompt-row" aria-label="Example searches">
+          <span>Try an idea</span>
+          <button class="prompt-chip" type="button" data-prompt="Quiet work cafés in Bandung with outdoor seating">Quiet work cafés</button>
+          <button class="prompt-chip" type="button" data-prompt="Authentic Padang food near Blok M, Jakarta">Padang food</button>
+          <button class="prompt-chip" type="button" data-prompt="A peaceful park for an evening walk in Central Jakarta">Evening park</button>
+          <button class="prompt-chip" type="button" data-prompt="Family-friendly things to do in Yogyakarta this weekend">Weekend in Yogya</button>
+        </div>
+      </section>
+
+      <div id="notice" class="notice" role="status" aria-live="polite" hidden></div>
+
+      <section id="welcome" class="welcome" aria-labelledby="welcome-title">
+        <div class="welcome-heading">
+          <span class="welcome-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none">
+              <path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"></path>
+              <circle cx="12" cy="12" r="4" stroke="currentColor" stroke-width="1.5"></circle>
+            </svg>
+          </span>
+          <div>
+            <p class="section-kicker">Built for dependable discovery</p>
+            <h2 id="welcome-title">Real data, without the guesswork</h2>
+          </div>
+        </div>
+        <div class="capability-grid">
+          <article>
+            <span class="step-number">01</span>
+            <h3>Ask naturally</h3>
+            <p>Qwen understands place types, neighborhoods, constraints, language, and travel mode.</p>
+          </article>
+          <article>
+            <span class="step-number">02</span>
+            <h3>Verify the matches</h3>
+            <p>Names, addresses, ratings, review counts, and categories come directly from Google Places.</p>
+          </article>
+          <article>
+            <span class="step-number">03</span>
+            <h3>Explore the route</h3>
+            <p>Open the verified place or prepare a route that continues directly in Google Maps.</p>
+          </article>
+        </div>
+      </section>
+
+      <section id="loading" class="loading-panel" aria-live="polite" hidden>
+        <span class="thinking-orbit" aria-hidden="true"><span></span></span>
+        <div>
+          <p class="section-kicker">Local intelligence at work</p>
+          <h2>Finding grounded recommendations…</h2>
+          <p>Qwen is interpreting your request, then Google Places will verify the matches. This can take around 20 seconds on the local model.</p>
+        </div>
+      </section>
+
+      <section id="results" class="results" aria-labelledby="results-title" hidden>
+        <div class="results-heading">
+          <div>
+            <p class="section-kicker">Your grounded shortlist</p>
+            <h2 id="results-title">Places worth exploring</h2>
+          </div>
+          <span id="result-count" class="result-count"></span>
+        </div>
+
+        <article class="answer-card">
+          <span class="answer-mark" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none">
+              <path d="M8 16.5 5.5 19v-4A7 7 0 1 1 19 12a7 7 0 0 1-7 7H9" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"></path>
+              <path d="M9 10h6M9 13h4" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"></path>
+            </svg>
+          </span>
+          <div>
+            <p id="answer-query" class="answer-query"></p>
+            <p id="answer-text" class="answer-text"></p>
+          </div>
+        </article>
+
+        <div id="places-grid" class="places-grid"></div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <div class="footer-shell">
+        <p><strong>WanderAI</strong><span>Local Qwen reasoning, grounded by Google Places.</span></p>
+        <div>
+          <span>No location is requested until you choose to share it.</span>
+          <a href="/docs" target="_blank" rel="noopener noreferrer">API documentation</a>
+        </div>
+      </div>
+    </footer>
+
+    <template id="place-template">
+      <article class="place-card">
+        <div class="place-visual" aria-hidden="true">
+          <span class="map-road road-one"></span>
+          <span class="map-road road-two"></span>
+          <span class="map-road road-three"></span>
+          <span class="place-pin">
+            <svg viewBox="0 0 24 24" fill="none">
+              <path d="M12 21s6-5.2 6-11a6 6 0 1 0-12 0c0 5.8 6 11 6 11Z" fill="currentColor"></path>
+              <circle cx="12" cy="10" r="2.1" fill="white"></circle>
+            </svg>
+          </span>
+          <span class="place-type"></span>
+          <span class="place-number"></span>
+        </div>
+        <div class="place-body">
+          <div class="verified-line"><span></span> Google Places result</div>
+          <h3></h3>
+          <p class="address"></p>
+          <div class="rating-row">
+            <span class="rating"></span>
+            <span class="review-count"></span>
+          </div>
+          <div class="card-actions">
+            <a class="place-maps-link" target="_blank" rel="noopener noreferrer">
+              <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M14 5h5v5M19 5l-8 8M18 13v5a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+              <span>Open map</span>
+            </a>
+            <button class="map-button" type="button">
+              <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <path d="m3.5 6 5-2.5 7 3 5-2.5v14l-5 2.5-7-3-5 2.5V6Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"></path>
+                <path d="M8.5 3.5v14M15.5 6.5v14" stroke="currentColor" stroke-width="1.6"></path>
+              </svg>
+              <span>View map</span>
+            </button>
+          </div>
+        </div>
+      </article>
+    </template>
+
+    <dialog id="map-dialog" class="map-dialog" aria-labelledby="dialog-title">
+      <div class="dialog-shell">
+        <header class="dialog-header">
+          <div class="dialog-place-summary">
+            <span class="dialog-pin" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none">
+                <path d="M12 21s6-5.2 6-11a6 6 0 1 0-12 0c0 5.8 6 11 6 11Z" fill="currentColor"></path>
+                <circle cx="12" cy="10" r="2.1" fill="white"></circle>
+              </svg>
+            </span>
+            <div>
+              <strong id="dialog-title"></strong>
+              <span id="dialog-view-label">Route planner</span>
+            </div>
+          </div>
+          <div class="dialog-header-actions">
+            <a id="dialog-maps-link" class="dialog-external" target="_blank" rel="noopener noreferrer">
+              Open in Google Maps
+              <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M14 5h5v5M19 5l-8 8M18 13v5a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+            </a>
+            <button id="dialog-close" class="icon-button" type="button" aria-label="Close map">
+              <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m7 7 10 10M17 7 7 17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"></path></svg>
+            </button>
+          </div>
+        </header>
+
+        <div class="route-dialog-content">
+          <section class="live-map-panel" aria-label="Live Google map">
+            <iframe
+              id="map-frame"
+              title="Google map for the selected place"
+              loading="eager"
+              referrerpolicy="no-referrer-when-downgrade"
+            ></iframe>
+            <div id="map-loading" class="map-loading" aria-live="polite">
+              <span class="map-loader" aria-hidden="true"></span>
+              <strong>Loading Google Maps</strong>
+              <span>Bringing the selected place into view…</span>
+            </div>
+            <div id="map-unavailable" class="map-unavailable" hidden>
+              <span class="dialog-pin" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none">
+                  <path d="M12 21s6-5.2 6-11a6 6 0 1 0-12 0c0 5.8 6 11 6 11Z" fill="currentColor"></path>
+                  <circle cx="12" cy="10" r="2.1" fill="white"></circle>
+                </svg>
+              </span>
+              <strong>Map preview unavailable</strong>
+              <p>You can still open this place safely in Google Maps.</p>
+            </div>
+            <span class="live-map-badge"><i></i> Live Google map</span>
+          </section>
+          <aside class="place-details">
+            <p class="section-kicker">Verified place details</p>
+            <h2 id="dialog-place-name"></h2>
+            <p id="dialog-address" class="dialog-address"></p>
+            <div class="dialog-rating">
+              <span id="dialog-rating"></span>
+              <span id="dialog-reviews"></span>
+            </div>
+
+            <div class="route-builder">
+              <div class="route-builder-heading">
+                <div>
+                  <p class="section-kicker">Route on map</p>
+                  <h3>Choose how to get there</h3>
+                </div>
+              </div>
+              <label for="dialog-origin">Starting point</label>
+              <div class="dialog-input-row">
+                <input id="dialog-origin" maxlength="250" placeholder="Enter an address or use your location">
+                <button id="dialog-locate" class="icon-button location-button" type="button" aria-label="Use my location" title="Use my location">
+                  <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="1.7"></circle><path d="M12 3v3M12 18v3M3 12h3M18 12h3" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"></path></svg>
+                </button>
+              </div>
+              <label for="dialog-mode">Travel mode</label>
+              <select id="dialog-mode">
+                <option value="driving">Driving</option>
+                <option value="walking">Walking</option>
+                <option value="bicycling">Bicycling</option>
+                <option value="transit">Transit</option>
+              </select>
+              <p id="route-note" class="route-note">Show the route here, then open Google Maps when you are ready to navigate.</p>
+              <button id="show-route" class="primary-button route-button" type="button">Show route on map</button>
+              <a id="route-maps-link" class="primary-button route-link" target="_blank" rel="noopener noreferrer" hidden>
+                Open route in Google Maps
+                <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M14 5h5v5M19 5l-8 8M18 13v5a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+              </a>
+            </div>
+
+            <div class="data-note">
+              <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.6"></circle><path d="M12 11v5M12 8h.01" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"></path></svg>
+              <p><strong>Reliable by design</strong>Place information comes from Google Places and the live map comes from Google Maps Embed. Current travel time and distance remain in Google Maps.</p>
+            </div>
+          </aside>
+        </div>
+      </div>
+    </dialog>
+
+    <script src="/static/app.js" defer></script>
+  </body>
+</html>
