@@ -1,8 +1,18 @@
 # WanderAI
 
-A secure-by-default FastAPI backend and small web UI that lets local Ollama recognize
-place-finding prompts, ground recommendations in Google Places results, and open each
-location in Google Maps.
+A FastAPI backend and web UI with a model-directed places agent (local Ollama or
+Gemini; DeepSeek on the Cloudflare Worker). The agent uses conversation history,
+searches multiple places, reads Google Place Details, and compares evidence before
+recommending a choice. Completed answers include clickable follow-up questions.
+
+Each turn permits at most eight search/detail actions and one final answer decision.
+Unknown place IDs and repeated actions are rejected. Tool errors are returned to the
+agent as observations; missing details must be described as unknown. Place Details
+can include price, opening hours, contact information, and amenities. These fields
+incur Google Places charges; see [Google's field documentation](https://developers.google.com/maps/documentation/places/web-service/data-fields).
+Follow-up references are resolved from saved conversation text and searched again for
+fresh evidence. Answers are delivered after the tool loop finishes through the existing
+NDJSON endpoint; this currently delivers a complete answer rather than token streaming.
 
 ## Google APIs you need
 

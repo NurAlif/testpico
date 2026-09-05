@@ -1,5 +1,6 @@
 import json
 from collections.abc import AsyncIterator
+from pathlib import Path
 
 from fastapi import HTTPException
 from google import genai
@@ -68,9 +69,7 @@ class GeminiClient:
         except Exception as exc:
             raise HTTPException(status_code=502, detail="Gemini request failed") from exc
 
-    async def _generate_stream(
-        self, *, system_instruction: str, prompt: str
-    ) -> AsyncIterator[str]:
+    async def _generate_stream(self, *, system_instruction: str, prompt: str) -> AsyncIterator[str]:
         config = types.GenerateContentConfig(
             system_instruction=system_instruction,
             temperature=0.2,
@@ -88,6 +87,28 @@ class GeminiClient:
             raise
         except Exception as exc:
             raise HTTPException(status_code=502, detail="Gemini request failed") from exc
+
+    async def agent_step(self, context: dict) -> dict:
+        raw = await self._generate(
+            system_instruction=Path(__file__).with_name("agent_prompt.txt").read_text(),
+            prompt=json.dumps(context, ensure_ascii=False),
+            json_schema={
+                "type": "object",
+                "properties": {
+                    "action": {"type": "string", "enum": ["search", "details", "finish"]},
+                    "query": {"type": "string"},
+                    "open_now": {"type": "boolean"},
+                    "place_id": {"type": "string"},
+                    "answer": {"type": "string"},
+                    "suggestions": {"type": "array", "items": {"type": "string"}},
+                },
+                "required": ["action"],
+            },
+        )
+        result = json.loads(raw)
+        if not isinstance(result, dict):
+            raise ValueError("Invalid agent response")
+        return result
 
     async def extract_intent(self, user_message: str) -> PlaceIntent:
         try:
@@ -115,9 +136,7 @@ class GeminiClient:
         transcript = "\n".join(safe_history)
         return f"Conversation so far:\n{transcript}\n\nLatest user message:\n{message}"
 
-    async def normal_chat_stream(
-        self, message: str, history: list[Message]
-    ) -> AsyncIterator[str]:
+    async def normal_chat_stream(self, message: str, history: list[Message]) -> AsyncIterator[str]:
         system_instruction = (
             "You are a helpful local assistant. If the user asks to find a real-world place, "
             "tell them the maps search could not be performed rather than inventing current "

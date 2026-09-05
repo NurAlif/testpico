@@ -532,7 +532,7 @@ messageInput.addEventListener("keydown", (event) => {
 form.addEventListener("submit", async (event) => {
   event.preventDefault();
   const message = messageInput.value.trim();
-  if (!message) return;
+  if (!message || form.getAttribute("aria-busy") === "true") return;
 
   setNotice("");
   hideEmptyState();
@@ -549,6 +549,23 @@ form.addEventListener("submit", async (event) => {
     const finalAnswer = (event.answer || streamedAnswer).trim();
     renderAnswerText(finalAnswer, assistant.bubble);
     if (event.places?.length) appendPlacesBlock(assistant.body, event.places);
+    const followups = document.createElement("div");
+    followups.className = "followup-actions";
+    followups.setAttribute("aria-label", "Suggested follow-up questions");
+    for (const prompt of (event.suggestions || []).slice(0, 3)) {
+      if (typeof prompt !== "string" || !prompt.trim()) continue;
+      const button = document.createElement("button");
+      button.type = "button";
+      button.textContent = prompt;
+      button.addEventListener("click", () => {
+        if (form.getAttribute("aria-busy") === "true") return;
+        messageInput.value = prompt;
+        updateSendButton();
+        form.requestSubmit();
+      });
+      followups.append(button);
+    }
+    assistant.body.append(followups);
     history.push(
       { role: "user", content: message },
       { role: "assistant", content: finalAnswer },

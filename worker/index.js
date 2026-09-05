@@ -1,3 +1,4 @@
+import { runAgent } from "./agent.js";
 import { authenticate, authRoute } from "./auth.js";
 const json = (data, status = 200, headers = {}) =>
   new Response(JSON.stringify(data), {
@@ -550,15 +551,26 @@ export default {
         if (!owned) return responseWithCors(error("Conversation not found",404),headers);
         const {results: savedHistory} = await env.DB.prepare("SELECT role,content FROM messages WHERE conversation_id=? ORDER BY id DESC LIMIT 20").bind(owned.id).all();
         payload.history = savedHistory.reverse();
-        const intent = await classifyIntent(env, message);
-        const places = intent.is_place_search && intent.search_query ? await searchPlaces(env, intent.search_query, intent) : [];
-        const answerText = await answer(env, message, payload.history, intent.is_place_search ? places : null);
+        const result = await runAgent({
+          decide: (system, prompt) => gemini(env, system, prompt, true),
+          search: (query, options) => searchPlaces(env, query, options),
+          details: async (id) => {
+            if (!/^[A-Za-z0-9_-]+$/.test(id)) throw new Error("Invalid place ID");
+            const response = await fetch(`https://places.googleapis.com/v1/places/${encodeURIComponent(id)}`, {
+              headers: {"x-goog-api-key": env.GOOGLE_PLACES_API_KEY, "x-goog-fieldmask": "id,displayName,formattedAddress,rating,userRatingCount,priceLevel,currentOpeningHours,regularOpeningHours,websiteUri,internationalPhoneNumber,editorialSummary,businessStatus,dineIn,takeout,delivery,reservable,outdoorSeating,servesVegetarianFood,accessibilityOptions"},
+              signal: AbortSignal.timeout(15000),
+            });
+            if (!response.ok) throw new Error("Place details unavailable");
+            return response.json();
+          },
+        }, message, payload.history);
+        const {answer: answerText, places, intent, suggestions} = result;
         await saveConversation(env, payload.conversation_id, message, answerText, places.length > 0);
         if (url.pathname.endsWith("/stream")) {
-          const ndjson = `${JSON.stringify({ type: "delta", text: answerText })}\n${JSON.stringify({ type: "done", answer: answerText, places })}\n`;
+          const ndjson = `${JSON.stringify({ type: "delta", text: answerText })}\n${JSON.stringify({ type: "done", answer: answerText, places, suggestions })}\n`;
           return responseWithCors(new Response(ndjson, { headers: { "content-type": "application/x-ndjson; charset=utf-8" } }), headers);
         }
-        return responseWithCors(json({ answer: answerText, places, intent }), headers);
+        return responseWithCors(json({ answer: answerText, places, intent, suggestions }), headers);
       }
       if (request.method === "POST" && url.pathname === "/api/places/search") {
         const payload = await body(request);

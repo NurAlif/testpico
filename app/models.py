@@ -26,9 +26,7 @@ class PlaceSearchRequest(BaseModel):
 
 
 class PlacePhotoRequest(BaseModel):
-    name: str = Field(
-        max_length=4096, pattern=r"^places/[A-Za-z0-9_-]+/photos/[A-Za-z0-9_-]+$"
-    )
+    name: str = Field(max_length=4096, pattern=r"^places/[A-Za-z0-9_-]+/photos/[A-Za-z0-9_-]+$")
 
 
 class PhotoAuthor(BaseModel):
@@ -53,6 +51,7 @@ class Place(BaseModel):
     google_maps_url: str
     embed_url: str | None = None
     photo: PlacePhoto | None = None
+    details: dict = Field(default_factory=dict)
     photos: list[PlacePhoto] = Field(default_factory=list)
 
 
@@ -65,6 +64,7 @@ class PlaceIntent(BaseModel):
 
 class ChatResponse(BaseModel):
     answer: str
+    suggestions: list[str] = Field(default_factory=list)
     places: list[Place] = Field(default_factory=list)
     intent: PlaceIntent
 

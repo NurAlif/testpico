@@ -19,8 +19,9 @@ test("search retrieves a photo from Place Details when Text Search omits photos"
   try {
     const response = await worker.fetch(new Request("https://example.com/api/places/search", {
       method: "POST",
+      headers: { Authorization: "Bearer test-session" },
       body: JSON.stringify({ query: "Restaurant" }),
-    }), { GOOGLE_PLACES_API_KEY: "test-key" });
+    }), { GOOGLE_PLACES_API_KEY: "test-key", DB: { prepare: () => ({ bind: () => ({ first: async () => ({ user_id: "test-user" }) }) }) } });
     assert.equal(response.status, 200);
     const [place] = await response.json();
     assert.deepEqual(place.photo, photo);

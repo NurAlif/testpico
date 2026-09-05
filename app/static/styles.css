@@ -1531,3 +1531,8 @@ select:focus {
     transition-duration: 0.01ms !important;
   }
 }
+
+.followup-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
+.followup-actions button { border: 1px solid #bed7cb; border-radius: 20px; padding: 9px 14px; background: #f2faf5; color: #235940; cursor: pointer; font: inherit; text-align: left; }
+.followup-actions button:hover { background: #deefe4; }
+.followup-actions button:focus-visible { outline: 2px solid #235940; outline-offset: 3px; }

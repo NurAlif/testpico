@@ -209,6 +209,7 @@ async def chat_stream(payload: ChatRequest, request: Request) -> StreamingRespon
             "type": "done",
             "answer": answer,
             "places": [place.model_dump() for place in prepared.places],
+            "suggestions": prepared.suggestions,
         }
 
     return StreamingResponse(

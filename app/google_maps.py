@@ -1,3 +1,4 @@
+import re
 from urllib.parse import urlencode
 
 import httpx
@@ -137,6 +138,29 @@ class GoogleMapsClient:
                 )
             )
         return places
+
+    async def details(self, place_id: str) -> dict:
+        if not re.fullmatch(r"[A-Za-z0-9_-]+", place_id):
+            raise ValueError("Invalid place ID")
+        try:
+            response = await self.client.get(
+                f"https://places.googleapis.com/v1/places/{place_id}",
+                headers={
+                    "X-Goog-Api-Key": self._require_places_key(),
+                    "X-Goog-FieldMask": (
+                        "id,displayName,formattedAddress,rating,userRatingCount,priceLevel,"
+                        "currentOpeningHours,regularOpeningHours,websiteUri,"
+                        "internationalPhoneNumber,editorialSummary,businessStatus,dineIn,"
+                        "takeout,delivery,reservable,outdoorSeating,servesVegetarianFood,"
+                        "accessibilityOptions"
+                    ),
+                },
+                timeout=self.settings.google_request_timeout_seconds,
+            )
+            response.raise_for_status()
+            return response.json()
+        except (httpx.HTTPError, ValueError) as exc:
+            raise HTTPException(status_code=502, detail="Place details unavailable") from exc
 
     async def photo_url(self, name: str) -> str:
         try:
