@@ -1,3 +1,5 @@
+import { connectSettings, aiPayload, clearAIKeys } from "../../frontend/ai-settings.js";
+const API_BASE = document.querySelector('meta[name="api-base"]')?.content || "";
 const form = document.querySelector("#chat-form");
 const messageInput = document.querySelector("#message");
 const apiKeyInput = document.querySelector("#api-key");
@@ -13,6 +15,7 @@ const newChatButton = document.querySelector("#new-chat");
 const placeTemplate = document.querySelector("#place-template");
 
 const mapDialog = document.querySelector("#map-dialog");
+const mapCanvas = document.querySelector("#map-canvas");
 const mapFrame = document.querySelector("#map-frame");
 const mapLoading = document.querySelector("#map-loading");
 const mapUnavailable = document.querySelector("#map-unavailable");
@@ -31,9 +34,12 @@ const ASSISTANT_AVATAR = `
     <path d="m13.9 7.8-2.1 4.1-4.1 2.2 4.6.1 1.6 2.1.2-4.5 2.2-4-2.4-.1Z" fill="currentColor"></path>
   </svg>`;
 
+let authToken = "";
 let history = [];
 let currentPlace = null;
 let conversationId = null;
+let googleMapsPromise = null;
+let activeGoogleMap = null;
 const CONVERSATION_KEY = "wanderAIConversationId";
 
 try {
@@ -52,9 +58,11 @@ apiKeyInput.addEventListener("input", () => {
 
 function requestHeaders() {
   const result = { "Content-Type": "application/json" };
-  if (apiKeyInput.value) result.Authorization = `Bearer ${apiKeyInput.value}`;
+  if (authToken) result.Authorization = `Bearer ${authToken}`;
   return result;
 }
+
+connectSettings(api);
 
 function errorDetail(body, status) {
   if (typeof body.detail === "string") return body.detail;
@@ -65,60 +73,115 @@ function errorDetail(body, status) {
 }
 
 async function api(path, options = {}) {
-  const response = await fetch(path, {
+  const response = await fetch(API_BASE + path, {
     ...options,
     headers: { ...requestHeaders(), ...options.headers },
   });
   const body = await response.json().catch(() => ({}));
+  if (response.status === 401 && authToken) lockApp();
   if (!response.ok) throw new Error(errorDetail(body, response.status));
   return body;
 }
 
-async function postChatStream(path, payload, { onDelta, onDone }) {
-  const response = await fetch(path, {
-    method: "POST",
-    headers: requestHeaders(),
-    body: JSON.stringify(payload),
+async function postChatStream(path, payload, { onDelta, onDone, onProgress }) {
+  const response = await fetch(API_BASE + path, {
+    method: "POST", headers: requestHeaders(), body: JSON.stringify(payload),
   });
+  if (response.status === 401) lockApp();
   if (!response.ok) {
     const body = await response.json().catch(() => ({}));
     throw new Error(errorDetail(body, response.status));
   }
-  if (!response.body) {
-    const body = await response.json().catch(() => ({}));
-    onDone(body);
-    return;
-  }
+  if (!response.body) throw new Error("Streaming is unavailable in this browser.");
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
-  let buffer = "";
-  let final = null;
-  for (;;) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    buffer += decoder.decode(value, { stream: true });
-    let newline;
-    while ((newline = buffer.indexOf("\n")) !== -1) {
-      const line = buffer.slice(0, newline).trim();
-      buffer = buffer.slice(newline + 1);
-      if (!line) continue;
-      let event;
-      try {
-        event = JSON.parse(line);
-      } catch {
-        continue;
+  let buffer = "", final = null;
+  const consume = line => {
+    if (!line.trim()) return;
+    const event = JSON.parse(line);
+    if (event.type === "delta") onDelta(event.text || "");
+    else if (event.type === "done") final = event;
+    else if (event.type === "error") throw new Error(event.message || "The response stream failed. Try again.");
+    else onProgress?.(event);
+  };
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      buffer += done ? decoder.decode() : decoder.decode(value, { stream: true });
+      let newline;
+      while ((newline = buffer.indexOf("\n")) !== -1) {
+        consume(buffer.slice(0, newline));
+        buffer = buffer.slice(newline + 1);
       }
-      if (event.type === "delta") {
-        onDelta(event.text || "");
-      } else if (event.type === "done") {
-        final = event;
-      } else if (event.type === "error") {
-        throw new Error(event.message || "The response stream failed. Try again.");
-      }
+      if (done) break;
     }
+    if (buffer.trim()) consume(buffer);
+    if (!final) throw new Error("The response stream ended unexpectedly. Try again.");
+    onDone(final);
+  } finally {
+    await reader.cancel();
+    reader.releaseLock();
   }
-  if (!final) throw new Error("The response stream ended unexpectedly. Try again.");
-  onDone(final);
+}
+
+function createActivity(body) {
+  const panel = document.createElement("details");
+  panel.className = "agent-activity";
+  panel.open = true;
+  const summary = document.createElement("summary");
+  summary.textContent = "Thinking…";
+  panel.classList.add("is-processing");
+  panel.setAttribute("aria-busy", "true");
+  const status = document.createElement("div");
+  status.className = "activity-status";
+  status.setAttribute("role", "status");
+  const list = document.createElement("ul");
+  const reasoning = document.createElement("details");
+  reasoning.hidden = true;
+  reasoning.open = true;
+  const label = document.createElement("summary");
+  label.textContent = "Thinking";
+  const text = document.createElement("div");
+  text.className = "activity-reasoning";
+  reasoning.append(label, text);
+  panel.append(summary, status, list, reasoning);
+  body.prepend(panel);
+  const followThinking = () => { text.scrollTop = text.scrollHeight; };
+  reasoning.addEventListener("toggle", followThinking);
+  panel.addEventListener("toggle", followThinking);
+  const tools = new Map();
+  return {
+    update(event) {
+      if (event.type === "status") status.textContent = event.message;
+      if (event.type === "tool") {
+        let item = tools.get(event.id);
+        if (!item) { item = document.createElement("li"); tools.set(event.id, item); list.append(item); }
+        item.dataset.state = event.state;
+        item.textContent = event.message;
+        status.textContent = event.message;
+      }
+      if (event.type === "reasoning" && event.text) {
+        reasoning.hidden = false;
+        text.textContent = (text.textContent + event.text).slice(-24000);
+        followThinking();
+      }
+      scrollToBottom(false);
+    },
+    finish(failed = false) {
+      panel.classList.remove("is-processing");
+      panel.setAttribute("aria-busy", "false");
+      label.textContent = failed ? "Thinking interrupted" : "Thinking complete";
+      summary.textContent = failed ? "Response interrupted" : "Activity complete";
+      status.textContent = failed ? "The response stopped before completion." : "Response complete";
+      for (const item of tools.values()) {
+        if (item.dataset.state === "running") {
+          item.dataset.state = "error";
+          item.textContent += " - interrupted";
+        }
+      }
+      panel.open = failed;
+    },
+  };
 }
 
 function setServiceBadge(element, state, heading, detail) {
@@ -127,6 +190,7 @@ function setServiceBadge(element, state, heading, detail) {
   element.querySelector(".service-copy > span").textContent = heading;
   element.querySelector(".service-copy strong").textContent = detail;
   element.title = `${heading}: ${detail}`;
+  element.setAttribute("aria-label", element.title);
 }
 
 function setNotice(message = "") {
@@ -143,6 +207,7 @@ function setBusy(busy) {
   form.setAttribute("aria-busy", String(busy));
   messageInput.disabled = busy;
   newChatButton.disabled = busy;
+  document.querySelector("#logout").disabled = busy;
   updateSendButton();
   if (busy) {
     showTyping();
@@ -249,11 +314,32 @@ function createAssistantBubble() {
   return { body, bubble };
 }
 
+function appendFollowups(body, suggestions) {
+    const followups = document.createElement("div");
+    followups.className = "followup-actions";
+    followups.setAttribute("aria-label", "Suggested follow-up questions");
+    for (const prompt of (suggestions || []).slice(0, 3)) {
+      if (typeof prompt !== "string" || !prompt.trim()) continue;
+      const button = document.createElement("button");
+      button.type = "button";
+      button.textContent = prompt;
+      button.addEventListener("click", () => {
+        if (form.getAttribute("aria-busy") === "true") return;
+        messageInput.value = prompt;
+        updateSendButton();
+        form.requestSubmit();
+      });
+      followups.append(button);
+    }
+    body.append(followups);
+}
+
 function appendAssistantBubble(response) {
   const { body, bubble } = createAssistantBubble();
   renderAnswerText(response.answer || "", bubble);
   const places = response.places || [];
   if (places.length) appendPlacesBlock(body, places);
+  appendFollowups(body, response.suggestions || []);
 }
 
 function showTyping() {
@@ -263,7 +349,7 @@ function showTyping() {
   row.id = "typing-row";
   const bubble = document.createElement("div");
   bubble.className = "bubble typing-bubble";
-  bubble.setAttribute("aria-label", "WanderAI is thinking");
+  bubble.setAttribute("aria-label", "Wander Pico is thinking");
   [0, 1, 2].forEach(() => bubble.append(document.createElement("span")));
   row.append(makeAvatar(), bubble);
   thread.append(row);
@@ -279,7 +365,7 @@ async function ensureConversation() {
   if (conversationId) return conversationId;
   const conversation = await api("/api/conversations", { method: "POST" });
   conversationId = conversation.id;
-  localStorage.setItem(CONVERSATION_KEY, conversationId);
+  try { localStorage.setItem(CONVERSATION_KEY, conversationId); } catch {}
   return conversationId;
 }
 
@@ -295,38 +381,65 @@ async function newChat() {
   updateSendButton();
   conversation.scrollTo({ top: 0 });
   messageInput.focus();
+  setBusy(true);
   try {
     await ensureConversation();
+    await refreshHistory();
   } catch (error) {
     setNotice(`Could not start a saved conversation: ${error.message}`);
-  }
+  } finally { setBusy(false); }
 }
 
 newChatButton.addEventListener("click", () => void newChat());
 
-async function restoreConversation() {
-  const savedId = localStorage.getItem(CONVERSATION_KEY);
-  if (!savedId) {
-    await ensureConversation();
-    return;
-  }
+function mapKeyFromEmbedUrl(url) {
+  try { return new URL(url).searchParams.get("key"); } catch { return null; }
+}
+
+function loadGoogleMaps(key) {
+  if (window.google?.maps) return Promise.resolve(window.google.maps);
+  if (googleMapsPromise) return googleMapsPromise;
+  googleMapsPromise = new Promise((resolve, reject) => {
+    const callbackName = "__wanderPicoMapsReady";
+    const script = document.createElement("script");
+    const cleanup = () => { delete window[callbackName]; };
+    window[callbackName] = () => {
+      cleanup();
+      window.google?.maps ? resolve(window.google.maps) : reject(new Error("Google Maps did not load"));
+    };
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(key)}&v=weekly&loading=async&callback=${callbackName}`;
+    script.async = true;
+    script.onerror = () => { cleanup(); reject(new Error("Google Maps failed to load")); };
+    document.head.append(script);
+  });
+  return googleMapsPromise;
+}
+
+async function loadInteractiveMap(place, url) {
+  const key = mapKeyFromEmbedUrl(url);
+  if (!key || !Number.isFinite(place.latitude) || !Number.isFinite(place.longitude) || !mapCanvas) return false;
   try {
-    const saved = await api(`/api/conversations/${encodeURIComponent(savedId)}`);
-    conversationId = saved.id;
-    history = saved.messages || [];
-    if (!history.length) return;
-    hideEmptyState();
-    history.forEach((message) => {
-      if (message.role === "user") appendUserBubble(message.content);
-      else appendAssistantBubble({ answer: message.content, places: [] });
+    const maps = await loadGoogleMaps(key);
+    const Map = (await maps.importLibrary("maps")).Map;
+    const colorScheme = document.documentElement.dataset.theme === "dark" ? maps.ColorScheme.DARK : maps.ColorScheme.LIGHT;
+    mapCanvas.replaceChildren();
+    activeGoogleMap = new Map(mapCanvas, {
+      center: { lat: place.latitude, lng: place.longitude }, zoom: 16,
+      colorScheme, fullscreenControl: true, streetViewControl: false, mapTypeControl: false,
     });
+    mapCanvas.hidden = false;
+    mapFrame.hidden = true;
+    mapLoading.hidden = true;
+    return true;
   } catch {
-    localStorage.removeItem(CONVERSATION_KEY);
-    await ensureConversation();
+    return false;
   }
 }
 
-function loadEmbeddedMap(url) {
+function loadEmbeddedMap(place, url) {
+  activeGoogleMap = null;
+  mapCanvas.hidden = true;
+  mapCanvas.replaceChildren();
   mapLoading.hidden = !url;
   mapUnavailable.hidden = Boolean(url);
   mapFrame.hidden = !url;
@@ -335,6 +448,7 @@ function loadEmbeddedMap(url) {
   } else {
     mapFrame.removeAttribute("src");
   }
+  if (url) void loadInteractiveMap(place, url);
 }
 
 mapFrame.addEventListener("load", () => {
@@ -413,10 +527,14 @@ function openPlaceMap(place) {
   dialogRating.textContent = ratingLabel(place);
   dialogReviews.textContent = reviewLabel(place);
   dialogMapsLink.href = place.google_maps_url;
-  loadEmbeddedMap(place.embed_url);
+  loadEmbeddedMap(place, place.embed_url);
   loadDialogPhotos(place);
   mapDialog.showModal();
 }
+
+new MutationObserver(() => {
+  if (currentPlace && activeGoogleMap) loadEmbeddedMap(currentPlace, currentPlace.embed_url);
+}).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
 
 const photoObserver = "IntersectionObserver" in window
   ? new IntersectionObserver((entries) => {
@@ -482,6 +600,9 @@ function attachPlacePhoto(card, place) {
 
 function renderPlace(place, index) {
   const card = placeTemplate.content.firstElementChild.cloneNode(true);
+  const openDetails = () => openPlaceMap(place);
+  card.tabIndex = 0;
+  card.setAttribute("aria-label", `View details for ${place.name}`);
   card.querySelector(".place-number").textContent = String(index + 1).padStart(2, "0");
   card.querySelector(".place-type").textContent = formatPlaceType(place.primary_type);
   card.querySelector("h3").textContent = place.name;
@@ -489,7 +610,16 @@ function renderPlace(place, index) {
   card.querySelector(".rating").textContent = ratingLabel(place);
   card.querySelector(".review-count").textContent = reviewLabel(place);
   card.querySelector(".place-maps-link").href = place.google_maps_url;
-  card.querySelector(".map-button").addEventListener("click", () => openPlaceMap(place));
+  card.addEventListener("click", (event) => {
+    if (event.target.closest("a, button")) return;
+    openDetails();
+  });
+  card.addEventListener("keydown", (event) => {
+    if (event.target !== card || !["Enter", " "].includes(event.key)) return;
+    event.preventDefault();
+    openDetails();
+  });
+  card.querySelector(".map-button").addEventListener("click", openDetails);
   attachPlacePhoto(card, place);
   return card;
 }
@@ -523,7 +653,7 @@ messageInput.addEventListener("input", () => {
 });
 
 messageInput.addEventListener("keydown", (event) => {
-  if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) {
+  if (event.key === "Enter" && !event.shiftKey) {
     event.preventDefault();
     form.requestSubmit();
   }
@@ -542,36 +672,22 @@ form.addEventListener("submit", async (event) => {
   updateSendButton();
   setBusy(true);
 
-  let assistant = null;
+  const assistant = createAssistantBubble();
+  const activity = createActivity(assistant.body);
+  activity.update({type: "status", message: "Connecting..."});
   let streamedAnswer = "";
   const finish = (event) => {
-    if (!assistant) assistant = createAssistantBubble();
+    activity.finish();
     const finalAnswer = (event.answer || streamedAnswer).trim();
     renderAnswerText(finalAnswer, assistant.bubble);
     if (event.places?.length) appendPlacesBlock(assistant.body, event.places);
-    const followups = document.createElement("div");
-    followups.className = "followup-actions";
-    followups.setAttribute("aria-label", "Suggested follow-up questions");
-    for (const prompt of (event.suggestions || []).slice(0, 3)) {
-      if (typeof prompt !== "string" || !prompt.trim()) continue;
-      const button = document.createElement("button");
-      button.type = "button";
-      button.textContent = prompt;
-      button.addEventListener("click", () => {
-        if (form.getAttribute("aria-busy") === "true") return;
-        messageInput.value = prompt;
-        updateSendButton();
-        form.requestSubmit();
-      });
-      followups.append(button);
-    }
-    assistant.body.append(followups);
+    appendFollowups(assistant.body, event.suggestions || []);
     history.push(
       { role: "user", content: message },
       { role: "assistant", content: finalAnswer },
     );
     history = history.slice(-20);
-    setServiceBadge(modelStatus, "ready", "Google AI", "Gemini online");
+    setServiceBadge(modelStatus, "ready", "AI", "Connected");
     if (event.places?.length) setServiceBadge(mapsStatus, "ready", "Google Maps", "Places live");
   };
 
@@ -583,18 +699,20 @@ form.addEventListener("submit", async (event) => {
         message,
         history: history.slice(-12),
         conversation_id: conversationId,
+        ai: aiPayload(),
       },
       {
         onDelta: (text) => {
-          if (!assistant) assistant = createAssistantBubble();
           streamedAnswer += text;
           renderAnswerText(streamedAnswer, assistant.bubble);
           scrollToBottom(false);
         },
+        onProgress: event => activity.update(event),
         onDone: finish,
       },
     );
   } catch (error) {
+    activity.finish(true);
     setNotice(error.message);
     if (assistant && streamedAnswer) renderAnswerText(streamedAnswer, assistant.bubble);
     if (error.message.toLowerCase().includes("api key")) {
@@ -604,6 +722,7 @@ form.addEventListener("submit", async (event) => {
     }
   } finally {
     setBusy(false);
+    if (authToken) await refreshHistory().catch(error => setNotice(error.message));
     messageInput.focus();
   }
 });
@@ -612,11 +731,11 @@ async function checkServices() {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 10000);
   const [healthResult, configResult] = await Promise.allSettled([
-    fetch("/health", { signal: controller.signal, cache: "no-store" }).then((response) => {
+    fetch(API_BASE + "/health", { signal: controller.signal, cache: "no-store" }).then((response) => {
       if (!response.ok) throw new Error("Health check failed");
       return response.json();
     }),
-    fetch("/api/config", { signal: controller.signal, cache: "no-store" }).then((response) => {
+    fetch(API_BASE + "/api/config", { signal: controller.signal, cache: "no-store" }).then((response) => {
       if (!response.ok) throw new Error("Configuration check failed");
       return response.json();
     }),
@@ -627,7 +746,7 @@ async function checkServices() {
     const health = healthResult.value;
     const modelReady = health.model_available ?? health.status === "ok";
     const modelName = health.model || "AI model";
-    const providerName = health.provider === "ollama" ? "Local Ollama" : "AI";
+    const providerName = "Server default";
     setServiceBadge(
       modelStatus,
       modelReady ? "ready" : "unavailable",
@@ -648,6 +767,7 @@ async function checkServices() {
 
   if (configResult.status === "fulfilled") {
     apiKeyWrap.hidden = !configResult.value.api_auth_required;
+    window.dispatchEvent(new CustomEvent("wander-config", { detail: configResult.value }));
   }
 }
 
@@ -658,4 +778,135 @@ setInterval(() => {
   if (!document.hidden) checkServices();
 }, 30000);
 window.addEventListener("focus", checkServices);
-restoreConversation().catch((error) => setNotice(`Could not restore saved chat: ${error.message}`));
+
+const authPage = document.querySelector("#auth-page");
+const authForm = document.querySelector("#auth-form");
+const authError = document.querySelector("#auth-error");
+const sidebarToggle = document.querySelector("#sidebar-toggle");
+const sidebarBackdrop = document.querySelector("#sidebar-backdrop");
+function setSidebar(open) {
+  document.body.classList.toggle("sidebar-open", open);
+  sidebarToggle.setAttribute("aria-expanded", String(open));
+  sidebarBackdrop.hidden = !open;
+}
+let savedChats = [];
+let registering = false;
+function authMode() {
+  registering = location.hash === "#register";
+  document.querySelector("#auth-title").textContent = registering ? "Create your account" : "Welcome back";
+  document.querySelector("#identifier-label").firstChild.textContent = registering ? "Username" : "Username or email";
+  document.querySelector("#register-email-label").hidden = !registering;
+  document.querySelector("#register-email").required = registering;
+  document.querySelector("#password").minLength = registering ? 8 : 1;
+  document.querySelector("#password").autocomplete = registering ? "new-password" : "current-password";
+  document.querySelector("#auth-submit").textContent = registering ? "Register" : "Log in";
+  document.querySelector("#auth-toggle").textContent = registering ? "Already registered? Log in" : "Create an account";
+  document.querySelector("#auth-toggle").href = registering ? "#login" : "#register";
+  authError.textContent = "";
+}
+window.addEventListener("hashchange", authMode);
+authMode();
+function lockApp() {
+  clearAIKeys();
+  authToken = "";
+  history = [];
+  savedChats = [];
+  conversationId = null;
+  thread.querySelectorAll(".msg").forEach(node => node.remove());
+  document.querySelector("#history-list").replaceChildren();
+  setSidebar(false);
+  emptyState.hidden = false;
+  mapDialog.close();
+  mapFrame.removeAttribute("src");
+  currentPlace = null;
+  document.body.classList.add("auth-locked");
+  authPage.hidden = false;
+  authForm.reset();
+  window.dispatchEvent(new Event("wander-locked"));
+}
+authForm.addEventListener("submit", async event => {
+  event.preventDefault();
+  const button = document.querySelector("#auth-submit");
+  button.disabled = true;
+  authError.textContent = "";
+  try {
+    const identifier = document.querySelector("#identifier").value.trim();
+    const password = document.querySelector("#password").value;
+    if (registering) {
+      await api("/api/auth/register", {method:"POST",body:JSON.stringify({username:identifier,email:document.querySelector("#register-email").value.trim(),password})});
+      location.hash = "login";
+      authMode();
+      document.querySelector("#password").value = "";
+      setTimeout(() => { authError.textContent = "Account created. Log in to continue."; }, 0);
+    } else {
+      const result = await api("/api/auth/login", {method:"POST",body:JSON.stringify({identifier,password})});
+      authToken = result.token;
+      authForm.reset();
+      document.body.classList.remove("auth-locked");
+      authPage.hidden = true;
+      await refreshHistory();
+      if (savedChats.length) await openChat(savedChats[0].id);
+      else await newChat();
+      window.dispatchEvent(new Event("wander-authenticated"));
+      messageInput.focus();
+    }
+  } catch(error) {
+    if (authToken) setNotice(error.message);
+    else authError.textContent = error.message;
+  } finally { button.disabled = false; }
+});
+document.querySelector("#logout").addEventListener("click", async () => {
+  if (form.getAttribute("aria-busy") === "true") return;
+  try { await api("/api/auth/logout", {method:"POST"}); lockApp(); }
+  catch(error) { setNotice(error.message); }
+});
+sidebarToggle.addEventListener("click", () => {
+  const open = !document.body.classList.contains("sidebar-open");
+  setSidebar(open);
+  if (open) refreshHistory().catch(error => setNotice(error.message));
+});
+sidebarBackdrop.addEventListener("click", () => setSidebar(false));
+async function refreshHistory() {
+  savedChats = await api("/api/conversations");
+  renderHistory();
+}
+function renderHistory() {
+  const list = document.querySelector("#history-list");
+  const query = document.querySelector("#history-search").value.toLowerCase();
+  list.replaceChildren();
+  savedChats.filter(chat => chat.title.toLowerCase().includes(query)).forEach(chat => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "history-item";
+    button.setAttribute("aria-current", String(chat.id === conversationId));
+    button.textContent = chat.title;
+    const date = document.createElement("small");
+    date.textContent = new Date(chat.updated_at.replace(" ", "T") + "Z").toLocaleString();
+    button.append(date);
+    button.addEventListener("click", () => openChat(chat.id).catch(error => setNotice(error.message)));
+    list.append(button);
+  });
+  if (!list.children.length) list.textContent = "No saved chats found.";
+}
+document.querySelector("#history-search").addEventListener("input", renderHistory);
+async function openChat(id) {
+  if (form.getAttribute("aria-busy") === "true") return;
+  setBusy(true);
+  try {
+    const saved = await api(`/api/conversations/${encodeURIComponent(id)}`);
+    photoObserver?.disconnect();
+    thread.querySelectorAll(".msg").forEach(node => node.remove());
+    history = saved.messages || [];
+    conversationId = saved.id;
+    emptyState.hidden = history.length > 0;
+    history.forEach(message => {
+      if (message.role === "user") appendUserBubble(message.content);
+      else appendAssistantBubble({...message, answer:message.content});
+    });
+    setNotice("");
+    renderHistory();
+    setSidebar(false);
+    scrollToBottom(false);
+  } finally { setBusy(false); }
+}
+window.addEventListener("pageshow", event => { if (event.persisted) lockApp(); });

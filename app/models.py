@@ -1,12 +1,28 @@
 from typing import Literal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, SecretStr
 
 
 class Message(BaseModel):
     role: Literal["system", "user", "assistant"]
     content: str = Field(min_length=1, max_length=8_000)
+    places: list[dict] = Field(default_factory=list)
+    suggestions: list[str] = Field(default_factory=list)
+
+
+class AISelection(BaseModel):
+    provider: Literal["gemini", "deepseek", "openrouter", "freerouter", "groq", "ollama"]
+    model: str = Field(default="", max_length=200, pattern=r"^[^\r\n]*$")
+    api_key: SecretStr | None = Field(default=None, max_length=4096)
+    fallback: bool = False
+    fallback_model: str = Field(default="", max_length=200)
+
+
+class LocalSetupInput(BaseModel):
+    google_places_api_key: SecretStr | None = Field(default=None, max_length=4096)
+    google_maps_embed_api_key: SecretStr | None = Field(default=None, max_length=4096)
+    complete: bool = False
 
 
 class ChatRequest(BaseModel):
@@ -15,6 +31,7 @@ class ChatRequest(BaseModel):
     message: str = Field(min_length=1, max_length=4_000)
     history: list[Message] = Field(default_factory=list, max_length=20)
     conversation_id: UUID | None = None
+    ai: AISelection | None = None
 
 
 class PlaceSearchRequest(BaseModel):

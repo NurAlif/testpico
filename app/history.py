@@ -1,4 +1,5 @@
 import asyncio
+import json
 import sqlite3
 import uuid
 from pathlib import Path
@@ -7,7 +8,7 @@ from app.models import Message
 
 
 class HistoryStore:
-    """Small SQLite-backed conversation store for a single WanderAI deployment."""
+    """Small SQLite-backed conversation store for a single Wander Pico deployment."""
 
     def __init__(self, database_path: Path) -> None:
         self.database_path = database_path
@@ -39,6 +40,10 @@ class HistoryStore:
                 """
             )
 
+            columns = {row[1] for row in connection.execute("PRAGMA table_info(messages)")}
+            if "result_json" not in columns:
+                connection.execute("ALTER TABLE messages ADD COLUMN result_json TEXT")
+
     async def create_conversation(self) -> str:
         conversation_id = str(uuid.uuid4())
         await asyncio.to_thread(self._create_conversation, conversation_id)
@@ -59,8 +64,8 @@ class HistoryStore:
             if not exists:
                 connection.execute("INSERT INTO conversations (id) VALUES (?)", (conversation_id,))
             connection.executemany(
-                "INSERT INTO messages (conversation_id, role, content) VALUES (?, ?, ?)",
-                [(conversation_id, message.role, message.content) for message in messages],
+                "INSERT INTO messages (conversation_id, role, content, result_json) VALUES (?, ?, ?, ?)",
+                [(conversation_id, message.role, message.content, json.dumps({"places": message.places, "suggestions": message.suggestions})) for message in messages],
             )
             connection.execute(
                 "UPDATE conversations SET updated_at = CURRENT_TIMESTAMP WHERE id = ?",
@@ -78,7 +83,7 @@ class HistoryStore:
             if not exists:
                 return None
             rows = connection.execute(
-                "SELECT role, content FROM messages WHERE conversation_id = ? ORDER BY id",
+                "SELECT role, content, result_json FROM messages WHERE conversation_id = ? ORDER BY id",
                 (conversation_id,),
             ).fetchall()
-        return [Message(role=role, content=content) for role, content in rows]
+        return [Message(role=role, content=content, **(json.loads(result) if result else {})) for role, content, result in rows]

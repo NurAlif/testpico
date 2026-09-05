@@ -103,3 +103,26 @@ async def test_normal_chat_and_stream_contract():
     prepared = await assistant.prepare_stream(request)
     assert [chunk async for chunk in assistant.stream_answer(request, prepared)] == ["Hello!"]
     assert prepared.suggestions == ["Find cafes in Jakarta"]
+
+
+async def test_live_tool_events_precede_completion_and_report_failure():
+    events = []
+
+    class LiveMaps(Maps):
+        async def search_text(self, *args, **kwargs):
+            assert events[-1]["state"] == "running"
+            raise RuntimeError("secret provider error")
+
+    model = Model(
+        [
+            {"action": "search", "query": "Cafe"},
+            {"action": "finish", "answer": "Lookup unavailable"},
+        ]
+    )
+    await PlacesAssistant(model, LiveMaps()).prepare_stream(
+        ChatRequest(message="Find cafes"),
+        events.append,
+    )
+    assert events[0]["type"] == "status"
+    assert any(e.get("state") == "error" for e in events)
+    assert "secret" not in str(events)

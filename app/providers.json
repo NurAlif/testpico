@@ -1,0 +1,8 @@
+{
+  "gemini": {"name":"Google Gemini","url":"https://generativelanguage.googleapis.com/v1beta/openai","model":"gemini-flash-latest","note":"Google AI Studio API key required. Free-tier quotas depend on the model."},
+  "deepseek": {"name":"DeepSeek","url":"https://api.deepseek.com","model":"deepseek-v4-flash","note":"DeepSeek API key required."},
+  "openrouter": {"name":"OpenRouter","url":"https://openrouter.ai/api/v1","model":"openrouter/free","note":"Cloud model marketplace. Free models still need an OpenRouter API key and have rate limits."},
+  "freerouter": {"name":"FreeRouter","url":"http://localhost:18800/v1","model":"auto","note":"A self-hosted free-model router. Start FreeRouter on the backend machine; a gateway key is optional unless your router requires one.","requires_api_key":false,"base_url_env":"FREEROUTER_BASE_URL"},
+  "groq": {"name":"Groq","url":"https://api.groq.com/openai/v1","model":"llama-3.3-70b-versatile","note":"Groq API key required. Free-tier quotas apply."},
+  "ollama": {"name":"Local Ollama","url":"","model":"qwen3.5:9b","note":"No API key. Install Ollama and download a model on the machine running the backend. Hosted deployments need an administrator-configured Ollama connection."}
+}

@@ -15,6 +15,20 @@ def settings() -> Settings:
 
 
 @pytest.mark.asyncio
+async def test_connection_uses_a_minimal_places_request():
+    async def handler(request: httpx.Request) -> httpx.Response:
+        assert request.headers["x-goog-api-key"] == "private-places-key"
+        assert request.headers["x-goog-fieldmask"] == "places.id"
+        assert not request.url.query
+        assert request.content == b'{"textQuery":"coffee","pageSize":1,"languageCode":"en"}'
+        return httpx.Response(200, json={"places": [{"id": "test"}]})
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+        result = await GoogleMapsClient(client, settings()).test_connection()
+    assert result["ok"] is True
+
+
+@pytest.mark.asyncio
 async def test_search_uses_private_key_field_mask_and_bounded_page_size():
     async def handler(request: httpx.Request) -> httpx.Response:
         assert request.headers["x-goog-api-key"] == "private-places-key"

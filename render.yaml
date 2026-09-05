@@ -9,10 +9,12 @@ services:
       mountPath: /var/data
       sizeGB: 1
     envVars:
+      - key: AI_PROVIDER
+        value: gemini
       - key: HISTORY_DATABASE_PATH
         value: /var/data/wanderai.sqlite3
       - key: GEMINI_MODEL
-        value: gemini-2.5-flash
+        value: gemini-flash-latest
       - key: API_MODEL_NAME
         value: gemini-2.5-flash-maps
       - key: CORS_ORIGINS

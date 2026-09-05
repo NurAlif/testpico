@@ -9,8 +9,9 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
-    app_name: str = "WanderAI"
-    ai_provider: Literal["ollama", "gemini"] = "ollama"
+    provider_encryption_key: SecretStr | None = None
+    app_name: str = "Wander Pico"
+    ai_provider: Literal["ollama", "gemini", "deepseek", "openrouter", "freerouter", "groq"] = "ollama"
     ollama_base_url: str = "http://localhost:11434"
     ollama_model: str = "qwen3.5:9b"
     ollama_context_length: int = Field(default=8192, ge=1024)
@@ -19,8 +20,17 @@ class Settings(BaseSettings):
     history_database_path: Path = Path("data/wanderai.sqlite3")
 
     gemini_api_key: SecretStr | None = None
-    gemini_model: str = "gemini-2.5-flash"
+    gemini_model: str = "gemini-flash-latest"
     gemini_request_timeout_seconds: float = Field(default=120, ge=5, le=600)
+    deepseek_api_key: SecretStr | None = None
+    deepseek_model: str = "deepseek-v4-flash"
+    openrouter_api_key: SecretStr | None = None
+    openrouter_model: str = "openrouter/free"
+    freerouter_api_key: SecretStr | None = None
+    freerouter_model: str = "auto"
+    freerouter_base_url: str = "http://localhost:18800/v1"
+    groq_api_key: SecretStr | None = None
+    groq_model: str = "llama-3.3-70b-versatile"
     api_model_name: str = "qwen3.5:9b-maps"
 
     google_places_api_key: SecretStr | None = None

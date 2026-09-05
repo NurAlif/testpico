@@ -8,7 +8,7 @@ test("serves an OpenAPI document at /api/openapi.json", async () => {
   assert.match(response.headers.get("content-type"), /application\/json/);
   const spec = await response.json();
   assert.equal(spec.openapi, "3.0.3");
-  assert.equal(spec.info.title, "WanderAI API");
+  assert.equal(spec.info.title, "Wander Pico API");
   for (const path of [
     "/health",
     "/api/config",

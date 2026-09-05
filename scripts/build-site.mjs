@@ -12,7 +12,7 @@ const indexPath = join(output, "index.html");
 const index = await readFile(indexPath, "utf8");
 await writeFile(
   indexPath,
-  index.replaceAll('/static/styles.css', '/styles.css').replaceAll('/static/app.js', '/app.js'),
+  index.replace('<head>', '<head>\n    <meta name="api-base" content="https://wanderai-api.testpico.workers.dev">').replaceAll('/static/styles.css', '/styles.css').replaceAll('/static/', '/'),
 );
 
 await mkdir(join(output, ".herenow"), { recursive: true });

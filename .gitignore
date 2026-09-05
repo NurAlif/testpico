@@ -11,3 +11,11 @@ __pycache__/
 .ruff_cache/
 .coverage
 htmlcov/
+
+node_modules/
+test-results/
+playwright-report/
+.dev.vars
+.dev.vars.*
+debug.log
+.test-tmp/

@@ -1,4 +1,5 @@
 import json
+import re
 from collections.abc import AsyncIterator
 from pathlib import Path
 
@@ -69,10 +70,14 @@ class GeminiClient:
         except Exception as exc:
             raise HTTPException(status_code=502, detail="Gemini request failed") from exc
 
-    async def _generate_stream(self, *, system_instruction: str, prompt: str) -> AsyncIterator[str]:
+    async def _generate_stream(
+        self, *, system_instruction: str, prompt: str, json_mode=False, emit=None
+    ) -> AsyncIterator[str]:
         config = types.GenerateContentConfig(
             system_instruction=system_instruction,
             temperature=0.2,
+            response_mime_type="application/json" if json_mode else None,
+            thinking_config=types.ThinkingConfig(include_thoughts=True) if emit else None,
         )
         try:
             stream = await self._require_client().aio.models.generate_content_stream(
@@ -81,8 +86,14 @@ class GeminiClient:
                 config=config,
             )
             async for chunk in stream:
-                if chunk.text:
-                    yield chunk.text
+                for candidate in chunk.candidates or []:
+                    for part in candidate.content.parts if candidate.content else []:
+                        if part.text:
+                            if part.thought:
+                                if emit:
+                                    emit({"type": "reasoning", "text": part.text})
+                            else:
+                                yield part.text
         except HTTPException:
             raise
         except Exception as exc:
@@ -105,6 +116,34 @@ class GeminiClient:
                 "required": ["action"],
             },
         )
+        result = json.loads(raw)
+        if not isinstance(result, dict):
+            raise ValueError("Invalid agent response")
+        return result
+
+    async def agent_step_stream(self, context: dict, emit) -> dict:
+        raw = ""
+        sent = ""
+        async for chunk in self._generate_stream(
+            system_instruction=Path(__file__).with_name("agent_prompt.txt").read_text()
+            + " Always put action first; for finish put answer second, then suggestions.",
+            prompt=json.dumps(context, ensure_ascii=False),
+            json_mode=True,
+            emit=emit,
+        ):
+            raw += chunk
+            match = re.match(
+                r'^\s*\{\s*"action"\s*:\s*"finish"\s*,\s*"answer"\s*:\s*"'
+                r'((?:[^"\\]|\\["\\/bfnrt]|\\u[0-9a-fA-F]{4})*)',
+                raw,
+            )
+            if match:
+                answer = json.loads('"' + match[1] + '"')[:8000]
+                if answer and 0xD800 <= ord(answer[-1]) <= 0xDBFF:
+                    answer = answer[:-1]
+                if len(answer) > len(sent):
+                    emit({"type": "delta", "text": answer[len(sent) :]})
+                    sent = answer
         result = json.loads(raw)
         if not isinstance(result, dict):
             raise ValueError("Invalid agent response")

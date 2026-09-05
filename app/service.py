@@ -20,19 +20,34 @@ class PlacesAssistant:
         self.gemini = gemini
         self.maps = maps
 
-    async def prepare_stream(self, request: ChatRequest) -> PreparedStream:
+    async def prepare_stream(self, request: ChatRequest, emit=None) -> PreparedStream:
+        streaming = emit is not None and hasattr(self.gemini, "agent_step_stream")
+        emit = emit or (lambda event: None)
         observations = []
         places = {}
         seen = set()
-        history = [m.model_dump() for m in request.history[-12:] if m.role in {"user", "assistant"}]
+        history = [
+            m.model_dump(exclude_defaults=True)
+            for m in request.history[-12:]
+            if m.role in {"user", "assistant"}
+        ]
         for step in range(9):
-            action = await self.gemini.agent_step(
+            emit(
                 {
-                    "message": request.message,
-                    "history": history,
-                    "observations": observations,
-                    "tools_remaining": 8 - step,
+                    "type": "status",
+                    "message": "Reviewing results…" if step else "Understanding your request…",
                 }
+            )
+            context = {
+                "message": request.message,
+                "history": history,
+                "observations": observations,
+                "tools_remaining": 8 - step,
+            }
+            action = (
+                await self.gemini.agent_step_stream(context, emit)
+                if streaming
+                else await self.gemini.agent_step(context)
             )
             if (
                 action.get("action") == "finish"
@@ -68,8 +83,26 @@ class PlacesAssistant:
                     and isinstance(action.get("query"), str)
                     and 0 < len(action["query"].strip()) <= 300
                 ):
+                    emit(
+                        {
+                            "type": "tool",
+                            "id": step,
+                            "tool": "search",
+                            "state": "running",
+                            "message": f"Searching Google Maps for {action['query']}",
+                        }
+                    )
                     found = await self.maps.search_text(
                         action["query"], open_now=action.get("open_now") is True
+                    )
+                    emit(
+                        {
+                            "type": "tool",
+                            "id": step,
+                            "tool": "search",
+                            "state": "complete",
+                            "message": f"Found {len(found)} places for {action['query']}",
+                        }
                     )
                     places.update((p.place_id, p) for p in found)
                     observations.append(
@@ -80,7 +113,26 @@ class PlacesAssistant:
                     and isinstance(action.get("place_id"), str)
                     and action["place_id"] in places
                 ):
+                    name = places[action["place_id"]].name
+                    emit(
+                        {
+                            "type": "tool",
+                            "id": step,
+                            "tool": "details",
+                            "state": "running",
+                            "message": f"Checking details for {name}",
+                        }
+                    )
                     data = await self.maps.details(action["place_id"])
+                    emit(
+                        {
+                            "type": "tool",
+                            "id": step,
+                            "tool": "details",
+                            "state": "complete",
+                            "message": f"Checked details for {name}",
+                        }
+                    )
                     places[action["place_id"]].details = data
                     observations.append({"action": action, "result": data})
                 else:
@@ -88,6 +140,15 @@ class PlacesAssistant:
                         {"error": "Invalid action or unknown place ID. Search first."}
                     )
             except Exception:
+                emit(
+                    {
+                        "type": "tool",
+                        "id": step,
+                        "tool": action.get("action"),
+                        "state": "error",
+                        "message": "Place lookup failed. Continuing with available information.",
+                    }
+                )
                 observations.append(
                     {"action": action, "error": "Place lookup failed. Do not invent missing data."}
                 )

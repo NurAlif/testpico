@@ -7,6 +7,7 @@ async function hashPassword(password, salt = hex(crypto.getRandomValues(new Uint
 }
 export async function authenticate(request, env) {
   const token = request.headers.get("authorization")?.replace(/^Bearer /, "") || "";
+  if (!token) return null;
   const session = await env.DB.prepare("SELECT user_id FROM sessions WHERE token_hash=? AND expires_at>?").bind(await digest(token), Math.floor(Date.now()/1000)).first();
   return session?.user_id || null;
 }

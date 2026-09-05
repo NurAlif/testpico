@@ -58,6 +58,39 @@ class GoogleMapsClient:
             )
         return key
 
+    async def test_connection(self) -> dict[str, object]:
+        """Make one minimal Places request to validate the configured server key."""
+        try:
+            response = await self.client.post(
+                PLACES_TEXT_SEARCH_URL,
+                headers={
+                    "X-Goog-Api-Key": self._require_places_key(),
+                    "X-Goog-FieldMask": "places.id",
+                    "Content-Type": "application/json",
+                },
+                json={"textQuery": "coffee", "pageSize": 1, "languageCode": "en"},
+                timeout=self.settings.google_request_timeout_seconds,
+            )
+            response.raise_for_status()
+        except HTTPException:
+            raise
+        except httpx.TimeoutException as exc:
+            raise HTTPException(status_code=504, detail="Google Places timed out") from exc
+        except httpx.HTTPStatusError as exc:
+            if exc.response.status_code in {401, 403}:
+                detail = "Google Places credentials or restrictions rejected the request"
+            elif exc.response.status_code == 429:
+                detail = "Google Places quota was reached"
+            else:
+                detail = "Google Places request failed"
+            raise HTTPException(status_code=502, detail=detail) from exc
+        except (httpx.RequestError, ValueError) as exc:
+            raise HTTPException(status_code=502, detail="Google Places is unavailable") from exc
+        return {
+            "ok": True,
+            "message": "Google Places is connected and ready for live place results.",
+        }
+
     def place_embed_url(self, place_id: str) -> str:
         params = urlencode({"key": self._require_embed_key(), "q": f"place_id:{place_id}"})
         return f"https://www.google.com/maps/embed/v1/place?{params}"
