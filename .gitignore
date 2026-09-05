@@ -1,5 +1,6 @@
 .env
 .herenow/
+.wrangler/
 data/
 server.log
 site-dist/

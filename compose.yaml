@@ -3,6 +3,11 @@ services:
     build: .
     restart: unless-stopped
     env_file: .env
+    environment:
+      AI_PROVIDER: ollama
+      OLLAMA_BASE_URL: http://host.docker.internal:11434
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     ports:
       - "8001:8001"
     healthcheck:

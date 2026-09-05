@@ -28,13 +28,8 @@ class PlacesAssistant:
         if not intent.is_place_search or not intent.search_query:
             return PreparedStream(intent=intent)
 
-        # Explicit request fields take precedence over model extraction.
-        origin = request.origin or intent.origin
-        travel_mode = request.travel_mode or intent.travel_mode
         places = await self.maps.search_text(
             intent.search_query,
-            origin=origin,
-            travel_mode=travel_mode,
             open_now=intent.open_now,
             language_code=intent.language_code,
         )
@@ -73,5 +68,5 @@ class PlacesAssistant:
         names = ", ".join(place.name for place in places)
         return (
             f"I found {len(places)} matching places: {names}. "
-            "Use the map cards for details and directions."
+            "Use the photo and map cards below for details."
         )

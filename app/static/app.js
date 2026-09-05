@@ -1,11 +1,8 @@
 const form = document.querySelector("#chat-form");
 const messageInput = document.querySelector("#message");
-const originInput = document.querySelector("#origin");
-const travelMode = document.querySelector("#travel-mode");
 const apiKeyInput = document.querySelector("#api-key");
 const apiKeyWrap = document.querySelector("#api-key-wrap");
 const sendButton = document.querySelector("#send");
-const locateButton = document.querySelector("#locate");
 const modelStatus = document.querySelector("#model-status");
 const mapsStatus = document.querySelector("#maps-status");
 const notice = document.querySelector("#notice");
@@ -21,18 +18,12 @@ const mapLoading = document.querySelector("#map-loading");
 const mapUnavailable = document.querySelector("#map-unavailable");
 const dialogClose = document.querySelector("#dialog-close");
 const dialogTitle = document.querySelector("#dialog-title");
-const dialogViewLabel = document.querySelector("#dialog-view-label");
 const dialogMapsLink = document.querySelector("#dialog-maps-link");
 const dialogPlaceName = document.querySelector("#dialog-place-name");
 const dialogAddress = document.querySelector("#dialog-address");
 const dialogRating = document.querySelector("#dialog-rating");
 const dialogReviews = document.querySelector("#dialog-reviews");
-const dialogOrigin = document.querySelector("#dialog-origin");
-const dialogMode = document.querySelector("#dialog-mode");
-const dialogLocate = document.querySelector("#dialog-locate");
-const routeNote = document.querySelector("#route-note");
-const showRouteButton = document.querySelector("#show-route");
-const routeMapsLink = document.querySelector("#route-maps-link");
+const dialogPhotos = document.querySelector("#dialog-photos");
 
 const ASSISTANT_AVATAR = `
   <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -45,9 +36,18 @@ let currentPlace = null;
 let conversationId = null;
 const CONVERSATION_KEY = "wanderAIConversationId";
 
-apiKeyInput.value = sessionStorage.getItem("mapsAssistantApiKey") || "";
+try {
+  apiKeyInput.value = sessionStorage.getItem("mapsAssistantApiKey") || "";
+} catch {
+  // Chat and health checks still work when browser storage is blocked.
+  apiKeyInput.value = "";
+}
 apiKeyInput.addEventListener("input", () => {
-  sessionStorage.setItem("mapsAssistantApiKey", apiKeyInput.value);
+  try {
+    sessionStorage.setItem("mapsAssistantApiKey", apiKeyInput.value);
+  } catch {
+    // The entered key remains available for this page session.
+  }
 });
 
 function requestHeaders() {
@@ -326,41 +326,6 @@ async function restoreConversation() {
   }
 }
 
-function readBrowserLocation() {
-  return new Promise((resolve, reject) => {
-    if (!navigator.geolocation) {
-      reject(new Error("Location is not supported by this browser. Enter a starting point instead."));
-      return;
-    }
-    navigator.geolocation.getCurrentPosition(
-      ({ coords }) => resolve(`${coords.latitude.toFixed(6)},${coords.longitude.toFixed(6)}`),
-      () => reject(new Error("Location permission was denied. Enter a starting point instead.")),
-      { enableHighAccuracy: false, timeout: 10000, maximumAge: 300000 },
-    );
-  });
-}
-
-async function fillBrowserLocation(button, targetInput) {
-  button.disabled = true;
-  setNotice("");
-  try {
-    const location = await readBrowserLocation();
-    targetInput.value = location;
-    originInput.value = location;
-    dialogOrigin.value = location;
-  } catch (error) {
-    setNotice(error.message);
-  } finally {
-    button.disabled = false;
-  }
-}
-
-function setRouteNote(message, state = "") {
-  routeNote.classList.remove("error", "success");
-  if (state) routeNote.classList.add(state);
-  routeNote.textContent = message;
-}
-
 function loadEmbeddedMap(url) {
   mapLoading.hidden = !url;
   mapUnavailable.hidden = Boolean(url);
@@ -382,14 +347,62 @@ mapFrame.addEventListener("error", () => {
   mapUnavailable.hidden = false;
 });
 
-function invalidatePreparedRoute() {
-  if (!currentPlace || routeMapsLink.hidden) return;
-  routeMapsLink.hidden = true;
-  routeMapsLink.removeAttribute("href");
-  showRouteButton.hidden = false;
-  loadEmbeddedMap(currentPlace.embed_url);
-  dialogViewLabel.textContent = `${formatPlaceType(currentPlace.primary_type)} · Live map`;
-  setRouteNote("Route details changed. Show the updated route when you are ready.");
+const MAX_DIALOG_PHOTOS = 6;
+
+function loadDialogPhotos(place) {
+  dialogPhotos.replaceChildren();
+  const photos = (place.photos || []).slice(0, MAX_DIALOG_PHOTOS);
+  if (!photos.length) {
+    const empty = document.createElement("p");
+    empty.className = "gallery-empty";
+    empty.textContent = "No photos are available for this place from Google yet.";
+    dialogPhotos.append(empty);
+    return;
+  }
+  photos.forEach((photo) => {
+    const figure = document.createElement("figure");
+    figure.className = "gallery-item";
+    const img = document.createElement("img");
+    img.alt = `${place.name} photo`;
+    img.loading = "lazy";
+    img.decoding = "async";
+    img.referrerPolicy = "no-referrer";
+    const caption = document.createElement("figcaption");
+    caption.textContent = "Google Maps";
+    const author = (photo.authorAttributions || []).find((item) => item.displayName);
+    if (author) {
+      caption.append(" · ");
+      const credit = document.createElement("a");
+      credit.textContent = author.displayName;
+      if (author.uri?.startsWith("https://")) {
+        credit.href = author.uri;
+        credit.target = "_blank";
+        credit.rel = "noopener noreferrer";
+      }
+      caption.append(credit);
+    }
+    figure.append(img, caption);
+    dialogPhotos.append(figure);
+    api("/api/places/photo", {
+      method: "POST",
+      body: JSON.stringify({ name: photo.name }),
+    })
+      .then(({ url }) => {
+        if (!figure.isConnected) return;
+        img.onerror = () => {
+          figure.classList.remove("has-photo");
+          figure.classList.add("unavailable");
+          caption.textContent = "Photo unavailable";
+        };
+        img.src = url;
+        figure.classList.add("has-photo");
+      })
+      .catch(() => {
+        if (!figure.isConnected) return;
+        figure.classList.add("unavailable");
+        caption.textContent = "Photo unavailable";
+      });
+  });
 }
 
 function openPlaceMap(place) {
@@ -399,19 +412,9 @@ function openPlaceMap(place) {
   dialogAddress.textContent = place.address || "Address unavailable";
   dialogRating.textContent = ratingLabel(place);
   dialogReviews.textContent = reviewLabel(place);
-  dialogOrigin.value = originInput.value.trim();
-  dialogMode.value = travelMode.value;
   dialogMapsLink.href = place.google_maps_url;
-  dialogViewLabel.textContent = `${formatPlaceType(place.primary_type)} · ${place.embed_url ? "Live map" : "Map link"}`;
   loadEmbeddedMap(place.embed_url);
-  routeMapsLink.hidden = true;
-  routeMapsLink.removeAttribute("href");
-  showRouteButton.hidden = false;
-  setRouteNote(
-    dialogOrigin.value
-      ? "Your starting point is ready. Show the route directly on the map."
-      : "Add a starting point to show a route. Current travel time and distance remain in Google Maps.",
-  );
+  loadDialogPhotos(place);
   mapDialog.showModal();
 }
 
@@ -491,27 +494,6 @@ function renderPlace(place, index) {
   return card;
 }
 
-locateButton.addEventListener("click", () => fillBrowserLocation(locateButton, originInput));
-dialogLocate.addEventListener("click", () => fillBrowserLocation(dialogLocate, dialogOrigin));
-
-originInput.addEventListener("input", () => {
-  dialogOrigin.value = originInput.value;
-});
-
-travelMode.addEventListener("change", () => {
-  dialogMode.value = travelMode.value;
-});
-
-dialogOrigin.addEventListener("input", () => {
-  originInput.value = dialogOrigin.value;
-  invalidatePreparedRoute();
-});
-
-dialogMode.addEventListener("change", () => {
-  travelMode.value = dialogMode.value;
-  invalidatePreparedRoute();
-});
-
 dialogClose.addEventListener("click", () => mapDialog.close());
 mapDialog.addEventListener("click", (event) => {
   if (event.target === mapDialog) mapDialog.close();
@@ -520,51 +502,8 @@ mapDialog.addEventListener("close", () => {
   mapFrame.removeAttribute("src");
   mapLoading.hidden = true;
   mapUnavailable.hidden = true;
+  dialogPhotos.replaceChildren();
   currentPlace = null;
-});
-
-showRouteButton.addEventListener("click", async () => {
-  if (!currentPlace) return;
-  const origin = dialogOrigin.value.trim();
-  if (!origin) {
-    setRouteNote("Enter a starting point or use your location before showing a route.", "error");
-    dialogOrigin.focus();
-    return;
-  }
-
-  originInput.value = origin;
-  travelMode.value = dialogMode.value;
-  routeMapsLink.hidden = true;
-  showRouteButton.disabled = true;
-  showRouteButton.textContent = "Loading route…";
-  setRouteNote("Loading a validated Google Maps route…");
-  try {
-    const directions = await api("/api/maps/directions", {
-      method: "POST",
-      body: JSON.stringify({
-        place_id: currentPlace.place_id,
-        destination: currentPlace.name,
-        origin,
-        travel_mode: dialogMode.value,
-      }),
-    });
-    loadEmbeddedMap(directions.embed_url || currentPlace.embed_url);
-    routeMapsLink.href = directions.google_maps_url;
-    routeMapsLink.hidden = false;
-    showRouteButton.hidden = true;
-    dialogViewLabel.textContent = `${formatPlaceType(currentPlace.primary_type)} · ${dialogMode.options[dialogMode.selectedIndex].text} route`;
-    setRouteNote(
-      directions.embed_url
-        ? "The route is now shown on the map. Open Google Maps for current travel time, distance, and navigation."
-        : "Your route link is ready. Open Google Maps for current travel time, distance, and navigation.",
-      "success",
-    );
-  } catch (error) {
-    setRouteNote(error.message, "error");
-  } finally {
-    showRouteButton.disabled = false;
-    showRouteButton.textContent = "Show route on map";
-  }
 });
 
 document.querySelectorAll(".suggestion-card").forEach((chip) => {
@@ -626,8 +565,6 @@ form.addEventListener("submit", async (event) => {
       {
         message,
         history: history.slice(-12),
-        origin: originInput.value.trim() || null,
-        travel_mode: travelMode.value,
         conversation_id: conversationId,
       },
       {
@@ -655,25 +592,29 @@ form.addEventListener("submit", async (event) => {
 });
 
 async function checkServices() {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 10000);
   const [healthResult, configResult] = await Promise.allSettled([
-    fetch("/health").then((response) => {
+    fetch("/health", { signal: controller.signal, cache: "no-store" }).then((response) => {
       if (!response.ok) throw new Error("Health check failed");
       return response.json();
     }),
-    fetch("/api/config").then((response) => {
+    fetch("/api/config", { signal: controller.signal, cache: "no-store" }).then((response) => {
       if (!response.ok) throw new Error("Configuration check failed");
       return response.json();
     }),
   ]);
+  clearTimeout(timeout);
 
   if (healthResult.status === "fulfilled") {
     const health = healthResult.value;
     const modelReady = health.model_available ?? health.status === "ok";
-    const modelName = health.model || "Gemini";
+    const modelName = health.model || "AI model";
+    const providerName = health.provider === "ollama" ? "Local Ollama" : "AI";
     setServiceBadge(
       modelStatus,
       modelReady ? "ready" : "unavailable",
-      "Google AI",
+      providerName,
       modelReady ? modelName : "Unavailable",
     );
     const mapsReady = health.places_configured;
@@ -684,7 +625,7 @@ async function checkServices() {
       mapsReady ? "Places ready" : "Needs setup",
     );
   } else {
-    setServiceBadge(modelStatus, "unavailable", "Google AI", "Backend offline");
+    setServiceBadge(modelStatus, "unavailable", "AI", "Backend offline");
     setServiceBadge(mapsStatus, "unavailable", "Google Maps", "Backend offline");
   }
 
@@ -695,4 +636,9 @@ async function checkServices() {
 
 updateSendButton();
 checkServices();
+// Refresh after transient startup failures and when returning to the app.
+setInterval(() => {
+  if (!document.hidden) checkServices();
+}, 30000);
+window.addEventListener("focus", checkServices);
 restoreConversation().catch((error) => setNotice(`Could not restore saved chat: ${error.message}`));

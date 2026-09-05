@@ -55,14 +55,29 @@ def verify_api_key(request: Request, settings: Settings) -> None:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid API key")
 
 
-def security_headers(response_headers: dict[str, str]) -> None:
+# Swagger UI is served from the jsdelivr CDN and injects inline styles/scripts,
+# so the interactive docs page needs a wider CSP than the rest of the app. The
+# page contains no user input, and the relaxation is scoped to that page only.
+APP_CSP = (
+    "default-src 'self'; frame-src https://www.google.com; "
+    "img-src 'self' data: https:; style-src 'self'; script-src 'self'; "
+    "connect-src 'self'; base-uri 'none'; frame-ancestors 'self'; form-action 'self'"
+)
+
+DOCS_CSP = (
+    "default-src 'self'; frame-src https://www.google.com; "
+    "img-src 'self' data: https:; "
+    "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; "
+    "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; "
+    "connect-src 'self'; font-src 'self' data: https://cdn.jsdelivr.net; "
+    "base-uri 'none'; frame-ancestors 'self'; form-action 'self'"
+)
+
+
+def security_headers(response_headers: dict[str, str], *, allow_docs_ui: bool = False) -> None:
     response_headers.update(
         {
-            "Content-Security-Policy": (
-                "default-src 'self'; frame-src https://www.google.com; "
-                "img-src 'self' data: https:; style-src 'self'; script-src 'self'; "
-                "connect-src 'self'; base-uri 'none'; frame-ancestors 'self'; form-action 'self'"
-            ),
+            "Content-Security-Policy": DOCS_CSP if allow_docs_ui else APP_CSP,
             "Referrer-Policy": "strict-origin-when-cross-origin",
             "X-Content-Type-Options": "nosniff",
             "X-Frame-Options": "SAMEORIGIN",

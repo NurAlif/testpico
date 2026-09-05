@@ -1,8 +1,8 @@
 # WanderAI
 
-A secure-by-default FastAPI backend and small web UI that lets Gemini recognize
+A secure-by-default FastAPI backend and small web UI that lets local Ollama recognize
 place-finding prompts, ground recommendations in Google Places results, and open each
-location or prepared route in Google Maps.
+location in Google Maps.
 
 ## Google APIs you need
 
@@ -16,7 +16,7 @@ need embedded maps:
 
 This implementation does **not** need Maps JavaScript API, Routes API, Directions API
 (Legacy), or Geocoding API. Places Text Search finds candidates; standard Google Maps URLs
-open places and directions without exposing the private Places key.
+and Maps Embed place views open each location without exposing the private Places key.
 
 ## Google Cloud Console setup
 
@@ -71,11 +71,19 @@ pip install -r requirements.txt
 uvicorn app.main:app --host 127.0.0.1 --port 8001
 ```
 
-Open <http://localhost:8001>. The API reference is at <http://localhost:8001/docs>.
+Open <http://localhost:8001>. The interactive Swagger API reference is at
+<http://localhost:8001/docs>. When `APP_API_KEY` is set, use the **Authorize**
+button in the top-right corner to enter the key (as `Bearer <key>` or
+`X-API-Key`); the docs page itself stays publicly reachable.
 
-Set `GEMINI_API_KEY` to a Google AI Studio key in `.env`. It stays on the backend and is never
-sent to the browser. The default model is `gemini-2.5-flash`; change `GEMINI_MODEL` only to a
-model enabled for your Google AI Studio project.
+Local runs default to `AI_PROVIDER=ollama`, using `http://localhost:11434` and
+`OLLAMA_MODEL=qwen3.5:9b`. Start Ollama and install that model with
+`ollama pull qwen3.5:9b` before starting the backend. There is no automatic cloud
+fallback. Google Places searches still use the configured Google Places API.
+Compose connects to Ollama on the host through `host.docker.internal:11434`.
+
+To explicitly opt into Gemini for a native Python run, set `AI_PROVIDER=gemini`
+and `GEMINI_API_KEY`. The hosted Worker has its own independent AI configuration.
 
 ## Docker and optional Open WebUI
 
@@ -96,11 +104,12 @@ Open WebUI is then at <http://localhost:3000>. Create the first admin account, t
 - URL if Open WebUI is elsewhere: `http://host.docker.internal:8001/v1` or the backend's
   HTTPS URL
 - API key: the value of `APP_API_KEY` (set a long random value in production)
-- Model filter, if needed: `API_MODEL_NAME`, default `gemini-2.5-flash-maps`
+- Model filter, if needed: `API_MODEL_NAME`, default `qwen3.5:9b-maps`
 
-Open WebUI receives the answer and safe Google Maps/directions links through the
-OpenAI-compatible endpoint. The included UI at port 8001 provides verified place cards,
-live embedded map previews when configured, direct Maps links as a fallback, and a route planner.
+Open WebUI receives the answer and safe Google Maps links through the
+OpenAI-compatible endpoint. The included UI at port 8001 provides verified place cards with
+Google Photos, live embedded map previews when configured, direct Maps links as a fallback,
+and a photo gallery for each place.
 
 ## API examples
 
@@ -108,8 +117,6 @@ live embedded map previews when configured, direct Maps links as a fallback, and
 $headers = @{ Authorization = "Bearer $env:APP_API_KEY" }
 $body = @{
   message = "Find good ramen near Blok M, Jakarta"
-  origin = "Monas, Jakarta"
-  travel_mode = "transit"
 } | ConvertTo-Json
 Invoke-RestMethod http://localhost:8001/api/chat -Method Post `
   -Headers $headers -ContentType application/json -Body $body
@@ -121,7 +128,7 @@ Key endpoints:
 - `POST /api/chat/stream` — same flow, but streams the answer as newline-delimited JSON
   (`{"type":"delta","text":"..."}` chunks followed by a final `{"type":"done","answer":"...","places":[...]}`)
 - `POST /api/places/search` — direct bounded Places search
-- `POST /api/maps/directions` — validated Google Maps directions URL and an optional embed URL
+- `POST /api/places/photo` — resolves a place photo reference to a Google-hosted image URL
 - `GET /v1/models` and `POST /v1/chat/completions` — OpenAI-compatible Open WebUI adapter
 - `GET /health` — configuration status without revealing secrets
 
@@ -139,8 +146,6 @@ Key endpoints:
   the defaults intentionally accept only localhost and the Compose service name.
 - The backend caps results, uses a minimal Places field mask, validates input sizes and travel
   modes, applies outbound timeouts, and never accepts an arbitrary upstream URL.
-- Browser geolocation works only on HTTPS or localhost and is used only after the user clicks
-  **Use my location**.
 - The provided SSH password is not stored or used. A hostname was not supplied, and password
   SSH should be replaced with an SSH key before deployment.
 

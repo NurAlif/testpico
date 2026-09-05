@@ -1,9 +1,7 @@
 from typing import Literal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
-
-TravelMode = Literal["driving", "walking", "bicycling", "transit"]
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class Message(BaseModel):
@@ -16,33 +14,15 @@ class ChatRequest(BaseModel):
 
     message: str = Field(min_length=1, max_length=4_000)
     history: list[Message] = Field(default_factory=list, max_length=20)
-    origin: str | None = Field(default=None, max_length=250)
-    travel_mode: TravelMode | None = None
     conversation_id: UUID | None = None
-
-    @field_validator("origin")
-    @classmethod
-    def empty_origin_is_none(cls, value: str | None) -> str | None:
-        return value or None
 
 
 class PlaceSearchRequest(BaseModel):
     model_config = ConfigDict(str_strip_whitespace=True)
 
     query: str = Field(min_length=2, max_length=300)
-    origin: str | None = Field(default=None, max_length=250)
-    travel_mode: TravelMode = "driving"
     open_now: bool = False
     language_code: str = Field(default="en", pattern=r"^[A-Za-z]{2,3}(-[A-Za-z]{2})?$")
-
-
-class DirectionsRequest(BaseModel):
-    model_config = ConfigDict(str_strip_whitespace=True)
-
-    place_id: str = Field(min_length=3, max_length=300, pattern=r"^[A-Za-z0-9_-]+$")
-    destination: str = Field(default="Destination", min_length=1, max_length=250)
-    origin: str = Field(min_length=2, max_length=250)
-    travel_mode: TravelMode = "driving"
 
 
 class PlacePhotoRequest(BaseModel):
@@ -73,13 +53,12 @@ class Place(BaseModel):
     google_maps_url: str
     embed_url: str | None = None
     photo: PlacePhoto | None = None
+    photos: list[PlacePhoto] = Field(default_factory=list)
 
 
 class PlaceIntent(BaseModel):
     is_place_search: bool = False
     search_query: str | None = Field(default=None, max_length=300)
-    origin: str | None = Field(default=None, max_length=250)
-    travel_mode: TravelMode = "driving"
     open_now: bool = False
     language_code: str = Field(default="en", pattern=r"^[A-Za-z]{2,3}(-[A-Za-z]{2})?$")
 
@@ -93,11 +72,6 @@ class ChatResponse(BaseModel):
 class ConversationResponse(BaseModel):
     id: UUID
     messages: list[Message] = Field(default_factory=list)
-
-
-class DirectionsResponse(BaseModel):
-    embed_url: str | None = None
-    google_maps_url: str
 
 
 class OpenAIChatRequest(BaseModel):

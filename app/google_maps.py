@@ -4,7 +4,7 @@ import httpx
 from fastapi import HTTPException, status
 
 from app.config import Settings
-from app.models import Place, TravelMode
+from app.models import Place, PlacePhoto
 
 PLACES_TEXT_SEARCH_URL = "https://places.googleapis.com/v1/places:searchText"
 PLACE_FIELD_MASK = ",".join(
@@ -61,45 +61,10 @@ class GoogleMapsClient:
         params = urlencode({"key": self._require_embed_key(), "q": f"place_id:{place_id}"})
         return f"https://www.google.com/maps/embed/v1/place?{params}"
 
-    def directions_urls(
-        self,
-        place_id: str,
-        origin: str,
-        travel_mode: TravelMode,
-        destination: str = "Destination",
-    ) -> tuple[str | None, str]:
-        embed_key = Settings.reveal(self.settings.google_maps_embed_api_key)
-        embed_url = None
-        if embed_key:
-            embed_params = urlencode(
-                {
-                    "key": embed_key,
-                    "origin": origin,
-                    "destination": f"place_id:{place_id}",
-                    "mode": travel_mode,
-                }
-            )
-            embed_url = f"https://www.google.com/maps/embed/v1/directions?{embed_params}"
-        maps_params = urlencode(
-            {
-                "api": "1",
-                "origin": origin,
-                "destination": destination,
-                "destination_place_id": place_id,
-                "travelmode": travel_mode,
-            }
-        )
-        return (
-            embed_url,
-            f"https://www.google.com/maps/dir/?{maps_params}",
-        )
-
     async def search_text(
         self,
         query: str,
         *,
-        origin: str | None = None,
-        travel_mode: TravelMode = "driving",
         open_now: bool = False,
         language_code: str = "en",
     ) -> list[Place]:
@@ -144,14 +109,17 @@ class GoogleMapsClient:
             name = raw.get("displayName", {}).get("text")
             if not place_id or not name:
                 continue
-            if origin:
-                embed_url, maps_url = self.directions_urls(
-                    place_id, origin, travel_mode, destination=name
-                )
-            else:
-                embed_url = self.place_embed_url(place_id) if self.embed_configured else None
-                maps_url = raw.get("googleMapsUri") or self._fallback_maps_url(place_id)
+            embed_url = self.place_embed_url(place_id) if self.embed_configured else None
+            maps_url = raw.get("googleMapsUri") or self._fallback_maps_url(place_id)
             location = raw.get("location") or {}
+            photos = [
+                PlacePhoto(
+                    name=photo.get("name"),
+                    authorAttributions=photo.get("authorAttributions") or [],
+                )
+                for photo in (raw.get("photos") or [])[:5]
+                if photo.get("name")
+            ]
             places.append(
                 Place(
                     place_id=place_id,
@@ -164,7 +132,8 @@ class GoogleMapsClient:
                     primary_type=raw.get("primaryType"),
                     google_maps_url=maps_url,
                     embed_url=embed_url,
-                    photo=(raw.get("photos") or [None])[0],
+                    photo=photos[0] if photos else None,
+                    photos=photos,
                 )
             )
         return places
