@@ -87,7 +87,16 @@ async function searchPlaces(env, query, intent = {}) {
   });
   if (!response.ok) throw new Error("Google Places request failed");
   const data = await response.json();
-  return (data.places || []).map((place) => ({
+  return (data.places || []).map((place) => {
+    const mapsUrl =
+      place.googleMapsUri ||
+      `https://www.google.com/maps/search/?api=1&query_place_id=${encodeURIComponent(place.id)}`;
+    const embedUrl = env.GOOGLE_MAPS_EMBED_API_KEY
+      ? `https://www.google.com/maps/embed/v1/place?key=${encodeURIComponent(
+          env.GOOGLE_MAPS_EMBED_API_KEY,
+        )}&q=place_id:${encodeURIComponent(place.id)}`
+      : null;
+    return {
     place_id: place.id,
     name: place.displayName?.text || "Unnamed place",
     address: place.formattedAddress || "",
@@ -96,10 +105,11 @@ async function searchPlaces(env, query, intent = {}) {
     rating: place.rating ?? null,
     rating_count: place.userRatingCount ?? null,
     primary_type: place.primaryType ?? null,
-    google_maps_url: place.googleMapsUri || `https://www.google.com/maps/search/?api=1&query_place_id=${encodeURIComponent(place.id)}`,
-    embed_url: null,
+    google_maps_url: mapsUrl,
+    embed_url: embedUrl,
     photo: (place.photos || [])[0] || null,
-  }));
+    };
+  });
 }
 
 async function answer(env, message, history, places) {
@@ -129,8 +139,8 @@ export default {
     if (request.method === "OPTIONS") return responseWithCors(new Response(null, { status: 204 }), { ...headers, "access-control-allow-methods": "GET, POST, OPTIONS", "access-control-allow-headers": "content-type, authorization" });
     const url = new URL(request.url);
     try {
-      if (request.method === "GET" && url.pathname === "/health") return responseWithCors(json({ status: "ok", model: env.GEMINI_MODEL || "gemini-2.5-flash", model_available: modelReady(env), places_configured: Boolean(env.GOOGLE_PLACES_API_KEY), embed_configured: false }), headers);
-      if (request.method === "GET" && url.pathname === "/api/config") return responseWithCors(json({ api_auth_required: false, maps_configured: Boolean(env.GOOGLE_PLACES_API_KEY), embed_configured: false, max_place_results: Number(env.MAX_PLACE_RESULTS || 5) }), headers);
+      if (request.method === "GET" && url.pathname === "/health") return responseWithCors(json({ status: "ok", model: env.GEMINI_MODEL || "gemini-2.5-flash", model_available: modelReady(env), places_configured: Boolean(env.GOOGLE_PLACES_API_KEY), embed_configured: Boolean(env.GOOGLE_MAPS_EMBED_API_KEY) }), headers);
+      if (request.method === "GET" && url.pathname === "/api/config") return responseWithCors(json({ api_auth_required: false, maps_configured: Boolean(env.GOOGLE_PLACES_API_KEY), embed_configured: Boolean(env.GOOGLE_MAPS_EMBED_API_KEY), max_place_results: Number(env.MAX_PLACE_RESULTS || 5) }), headers);
       if (request.method === "POST" && url.pathname === "/api/conversations") {
         const id = crypto.randomUUID();
         await env.DB.prepare("INSERT INTO conversations (id) VALUES (?)").bind(id).run();
