@@ -1,6 +1,6 @@
-# Ollama Maps Assistant
+# WanderAI
 
-A secure-by-default FastAPI backend and small web UI that lets `qwen3.5:9b` recognize
+A secure-by-default FastAPI backend and small web UI that lets Gemini recognize
 place-finding prompts, ground recommendations in Google Places results, and open each
 location or prepared route in Google Maps.
 
@@ -49,6 +49,15 @@ open places and directions without exposing the private Places key.
 
 Never reuse the private Places key as the optional browser embed key.
 
+## Saved chat history
+
+WanderAI stores chat history on the server in SQLite at `data/wanderai.sqlite3` by
+default. Set `HISTORY_DATABASE_PATH` to place the database on a persistent volume in
+production, and include it in your normal encrypted backup routine. Google Places
+cards, photos, and photo references are intentionally not stored: they are live
+content subject to Google's caching and attribution policies, so a saved place search
+is refreshed when it is run again.
+
 ## Run locally
 
 Python 3.11+ is required.
@@ -64,23 +73,11 @@ uvicorn app.main:app --host 127.0.0.1 --port 8001
 
 Open <http://localhost:8001>. The API reference is at <http://localhost:8001/docs>.
 
-Verify Ollama first if needed:
-
-```powershell
-ollama list
-curl.exe http://localhost:11434/api/tags
-```
-
-If the actual installed tag differs from `qwen3.5:9b`, set `OLLAMA_MODEL` in `.env` to
-the exact value returned by `ollama list`.
-
-The service sends `think: false` for low-latency classification and answers, and defaults to
-an 8K context window. Increase `OLLAMA_CONTEXT_LENGTH` only if your workload needs longer chat
-history and your GPU has enough memory.
+Set `GEMINI_API_KEY` to a Google AI Studio key in `.env`. It stays on the backend and is never
+sent to the browser. The default model is `gemini-2.5-flash`; change `GEMINI_MODEL` only to a
+model enabled for your Google AI Studio project.
 
 ## Docker and optional Open WebUI
-
-The API container reaches host Ollama through `host.docker.internal`:
 
 ```powershell
 docker compose up -d --build maps-api
@@ -99,7 +96,7 @@ Open WebUI is then at <http://localhost:3000>. Create the first admin account, t
 - URL if Open WebUI is elsewhere: `http://host.docker.internal:8001/v1` or the backend's
   HTTPS URL
 - API key: the value of `APP_API_KEY` (set a long random value in production)
-- Model filter, if needed: `API_MODEL_NAME`, default `qwen3.5:9b-maps`
+- Model filter, if needed: `API_MODEL_NAME`, default `gemini-2.5-flash-maps`
 
 Open WebUI receives the answer and safe Google Maps/directions links through the
 OpenAI-compatible endpoint. The included UI at port 8001 provides verified place cards,
@@ -121,6 +118,8 @@ Invoke-RestMethod http://localhost:8001/api/chat -Method Post `
 Key endpoints:
 
 - `POST /api/chat` — LLM intent detection, Places lookup, grounded answer, structured maps
+- `POST /api/chat/stream` — same flow, but streams the answer as newline-delimited JSON
+  (`{"type":"delta","text":"..."}` chunks followed by a final `{"type":"done","answer":"...","places":[...]}`)
 - `POST /api/places/search` — direct bounded Places search
 - `POST /api/maps/directions` — validated Google Maps directions URL and an optional embed URL
 - `GET /v1/models` and `POST /v1/chat/completions` — OpenAI-compatible Open WebUI adapter
@@ -152,4 +151,5 @@ Key endpoints:
 - [Maps Embed API](https://developers.google.com/maps/documentation/embed/embedding-map)
 - [Maps reporting and monitoring](https://developers.google.com/maps/reporting-and-monitoring/monitoring)
 - [Open WebUI OpenAI-compatible connections](https://docs.openwebui.com/getting-started/quick-start/connect-a-provider/starting-with-openai-compatible/)
-- [Ollama thinking controls](https://docs.ollama.com/capabilities/thinking)
+- [Google GenAI SDK](https://ai.google.dev/gemini-api/docs/libraries)
+- [Gemini Generate Content API](https://ai.google.dev/api/generate-content)

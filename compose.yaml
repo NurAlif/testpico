@@ -3,10 +3,6 @@ services:
     build: .
     restart: unless-stopped
     env_file: .env
-    environment:
-      OLLAMA_BASE_URL: http://host.docker.internal:11434
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
     ports:
       - "8001:8001"
     healthcheck:
@@ -19,10 +15,6 @@ services:
     image: ghcr.io/open-webui/open-webui:main
     profiles: ["open-webui"]
     restart: unless-stopped
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
-    environment:
-      OLLAMA_BASE_URL: http://host.docker.internal:11434
     volumes:
       - open-webui-data:/app/backend/data
     ports:

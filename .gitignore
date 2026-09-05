@@ -1,4 +1,7 @@
 .env
+.herenow/
+data/
+server.log
 .venv/
 __pycache__/
 *.py[cod]
@@ -6,4 +9,3 @@ __pycache__/
 .ruff_cache/
 .coverage
 htmlcov/
-

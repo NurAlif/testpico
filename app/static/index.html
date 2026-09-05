@@ -9,10 +9,10 @@
     <link rel="stylesheet" href="/static/styles.css">
   </head>
   <body>
-    <a class="skip-link" href="#discovery">Skip to search</a>
+    <a class="skip-link" href="#message">Skip to chat input</a>
 
-    <header class="site-header">
-      <div class="nav-shell">
+    <header class="chat-header">
+      <div class="header-shell">
         <a class="brand" href="/" aria-label="WanderAI home">
           <span class="brand-mark" aria-hidden="true">
             <svg viewBox="0 0 24 24" fill="none">
@@ -26,182 +26,117 @@
           </span>
         </a>
 
-        <nav class="nav-links" aria-label="Primary navigation">
-          <a class="active" href="#discovery">Discover</a>
-          <a href="/docs" target="_blank" rel="noopener noreferrer">API docs</a>
-        </nav>
-
-        <div class="service-status" aria-label="Service availability">
-          <span id="ollama-status" class="service-badge checking" title="Checking the local model">
-            <span class="status-dot"></span>
-            <span class="service-copy"><span>Local model</span><strong>Checking</strong></span>
-          </span>
-          <span id="maps-status" class="service-badge checking" title="Checking Google Maps configuration">
-            <span class="status-dot"></span>
-            <span class="service-copy"><span>Google Maps</span><strong>Checking</strong></span>
-          </span>
+        <div class="header-actions">
+          <div class="service-status" aria-label="Service availability">
+            <span id="model-status" class="service-badge checking" title="Checking Google AI Studio">
+              <span class="status-dot"></span>
+              <span class="service-copy"><span>Google AI</span><strong>Checking</strong></span>
+            </span>
+            <span id="maps-status" class="service-badge checking" title="Checking Google Maps configuration">
+              <span class="status-dot"></span>
+              <span class="service-copy"><span>Google Maps</span><strong>Checking</strong></span>
+            </span>
+          </div>
+          <a class="docs-link" href="/docs" target="_blank" rel="noopener noreferrer">API docs</a>
+          <button id="new-chat" class="new-chat-button" type="button">
+            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"></path></svg>
+            <span>New chat</span>
+          </button>
         </div>
       </div>
     </header>
 
-    <main id="discovery" class="page-shell">
-      <section class="hero" aria-labelledby="hero-title">
-        <p class="eyebrow"><span></span> Qwen + Google Places</p>
-        <h1 id="hero-title">Find a place that<br><em>fits the moment.</em></h1>
-        <p class="hero-copy">
-          Describe what you need in your own words. Your local model understands the request,
-          and Google Places grounds every recommendation in real location data.
-        </p>
-      </section>
+    <main id="conversation" class="chat-scroll">
+      <div id="thread" class="thread" role="log" aria-live="polite" aria-relevant="additions">
+        <section id="empty-state" class="empty-state" aria-labelledby="empty-title">
+          <span class="empty-logo" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none">
+              <circle cx="12" cy="12" r="8.5" stroke="currentColor" stroke-width="1.7"></circle>
+              <path d="m13.9 7.8-2.1 4.1-4.1 2.2 4.6.1 1.6 2.1.2-4.5 2.2-4-2.4-.1Z" fill="currentColor"></path>
+            </svg>
+          </span>
+          <p class="eyebrow"><span></span> Qwen + Google Places</p>
+          <h1 id="empty-title">Where should we go?</h1>
+          <p class="empty-copy">
+            Describe what you need in your own words — a mood, a neighborhood, a craving.
+            Your local model understands the request, and Google Places grounds every
+            recommendation in real location data.
+          </p>
+          <div class="suggestion-grid" aria-label="Example searches">
+            <button class="suggestion-card" type="button" data-prompt="Quiet work cafés in Bandung with outdoor seating">
+              <span aria-hidden="true">☕</span> Quiet work cafés
+            </button>
+            <button class="suggestion-card" type="button" data-prompt="Authentic Padang food near Blok M, Jakarta">
+              <span aria-hidden="true">🍛</span> Padang food
+            </button>
+            <button class="suggestion-card" type="button" data-prompt="A peaceful park for an evening walk in Central Jakarta">
+              <span aria-hidden="true">🌳</span> Evening park
+            </button>
+            <button class="suggestion-card" type="button" data-prompt="Family-friendly things to do in Yogyakarta this weekend">
+              <span aria-hidden="true">🎒</span> Weekend in Yogya
+            </button>
+          </div>
+        </section>
+      </div>
+    </main>
 
-      <section class="search-panel" aria-label="Place search">
+    <div class="composer-wrap">
+      <div class="composer-shell">
+        <div id="notice" class="notice" role="status" aria-live="polite" hidden></div>
         <form id="chat-form">
-          <div class="query-field">
-            <div class="field-heading">
-              <label for="message">Where should I go?</label>
-              <span id="message-count">0 / 4000</span>
-            </div>
+          <div class="composer-box">
             <textarea
               id="message"
               required
               maxlength="4000"
-              rows="2"
-              placeholder="Try: A quiet coffee shop in Bandung with outdoor seating…"
+              rows="1"
+              placeholder="Ask for a place — a quiet café, a park, a neighborhood to explore…"
             ></textarea>
-            <span class="key-hint"><kbd>Ctrl</kbd> + <kbd>Enter</kbd></span>
-          </div>
-
-          <div class="route-options">
-            <label class="control-group control-origin" for="origin">
-              <span class="control-label">Starting point <small>optional</small></span>
-              <span class="input-with-action">
-                <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                  <path d="M12 21s6-5.2 6-11a6 6 0 1 0-12 0c0 5.8 6 11 6 11Z" stroke="currentColor" stroke-width="1.7"></path>
-                  <circle cx="12" cy="10" r="2" stroke="currentColor" stroke-width="1.7"></circle>
-                </svg>
-                <input id="origin" maxlength="250" placeholder="Monas, Jakarta">
-                <button id="locate" class="inline-button" type="button" title="Use browser location">Use my location</button>
-              </span>
-            </label>
-
-            <label class="control-group" for="travel-mode">
-              <span class="control-label">Travel mode</span>
-              <span class="select-wrap">
-                <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                  <path d="M5 17h14M7 17l1-7h8l1 7M9 10l1-3h4l1 3M8 20h.01M16 20h.01" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"></path>
-                </svg>
-                <select id="travel-mode">
-                  <option value="driving">Driving</option>
-                  <option value="walking">Walking</option>
-                  <option value="bicycling">Bicycling</option>
-                  <option value="transit">Transit</option>
-                </select>
-              </span>
-            </label>
-
-            <button id="send" class="primary-button" type="submit">
+            <button id="send" class="send-button" type="submit" aria-label="Send message" disabled>
               <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
                 <path d="m14 5 5 7-5 7M19 12H5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path>
               </svg>
-              <span>Find places</span>
             </button>
           </div>
 
-          <details id="api-key-wrap" class="access-settings" hidden>
-            <summary>Connect to this protected assistant</summary>
-            <label for="api-key">Backend access key</label>
-            <input id="api-key" type="password" autocomplete="off" placeholder="Enter APP_API_KEY">
-            <p>Stored only for this browser tab.</p>
-          </details>
+          <div class="composer-options">
+            <details id="route-options" class="option-panel">
+              <summary>
+                <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 21s6-5.2 6-11a6 6 0 1 0-12 0c0 5.8 6 11 6 11Z" stroke="currentColor" stroke-width="1.7"></path><circle cx="12" cy="10" r="2" stroke="currentColor" stroke-width="1.7"></circle></svg>
+                Route options
+              </summary>
+              <div class="option-fields">
+                <label class="control-group control-origin" for="origin">
+                  <span class="control-label">Starting point <small>optional</small></span>
+                  <span class="input-with-action">
+                    <input id="origin" maxlength="250" placeholder="Monas, Jakarta">
+                    <button id="locate" class="inline-button" type="button" title="Use browser location">Use my location</button>
+                  </span>
+                </label>
+                <label class="control-group" for="travel-mode">
+                  <span class="control-label">Travel mode</span>
+                  <span class="select-wrap">
+                    <select id="travel-mode">
+                      <option value="driving">Driving</option>
+                      <option value="walking">Walking</option>
+                      <option value="bicycling">Bicycling</option>
+                      <option value="transit">Transit</option>
+                    </select>
+                  </span>
+                </label>
+              </div>
+            </details>
+            <details id="api-key-wrap" class="option-panel" hidden>
+              <summary>Connect to this protected assistant</summary>
+              <label for="api-key">Backend access key</label>
+              <input id="api-key" type="password" autocomplete="off" placeholder="Enter APP_API_KEY">
+              <p>Stored only for this browser tab.</p>
+            </details>
+          </div>
         </form>
-
-        <div class="prompt-row" aria-label="Example searches">
-          <span>Try an idea</span>
-          <button class="prompt-chip" type="button" data-prompt="Quiet work cafés in Bandung with outdoor seating">Quiet work cafés</button>
-          <button class="prompt-chip" type="button" data-prompt="Authentic Padang food near Blok M, Jakarta">Padang food</button>
-          <button class="prompt-chip" type="button" data-prompt="A peaceful park for an evening walk in Central Jakarta">Evening park</button>
-          <button class="prompt-chip" type="button" data-prompt="Family-friendly things to do in Yogyakarta this weekend">Weekend in Yogya</button>
-        </div>
-      </section>
-
-      <div id="notice" class="notice" role="status" aria-live="polite" hidden></div>
-
-      <section id="welcome" class="welcome" aria-labelledby="welcome-title">
-        <div class="welcome-heading">
-          <span class="welcome-icon" aria-hidden="true">
-            <svg viewBox="0 0 24 24" fill="none">
-              <path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"></path>
-              <circle cx="12" cy="12" r="4" stroke="currentColor" stroke-width="1.5"></circle>
-            </svg>
-          </span>
-          <div>
-            <p class="section-kicker">Built for dependable discovery</p>
-            <h2 id="welcome-title">Real data, without the guesswork</h2>
-          </div>
-        </div>
-        <div class="capability-grid">
-          <article>
-            <span class="step-number">01</span>
-            <h3>Ask naturally</h3>
-            <p>Qwen understands place types, neighborhoods, constraints, language, and travel mode.</p>
-          </article>
-          <article>
-            <span class="step-number">02</span>
-            <h3>Verify the matches</h3>
-            <p>Names, addresses, ratings, review counts, and categories come directly from Google Places.</p>
-          </article>
-          <article>
-            <span class="step-number">03</span>
-            <h3>Explore the route</h3>
-            <p>Open the verified place or prepare a route that continues directly in Google Maps.</p>
-          </article>
-        </div>
-      </section>
-
-      <section id="loading" class="loading-panel" aria-live="polite" hidden>
-        <span class="thinking-orbit" aria-hidden="true"><span></span></span>
-        <div>
-          <p class="section-kicker">Local intelligence at work</p>
-          <h2>Finding grounded recommendations…</h2>
-          <p>Qwen is interpreting your request, then Google Places will verify the matches. This can take around 20 seconds on the local model.</p>
-        </div>
-      </section>
-
-      <section id="results" class="results" aria-labelledby="results-title" hidden>
-        <div class="results-heading">
-          <div>
-            <p class="section-kicker">Your grounded shortlist</p>
-            <h2 id="results-title">Places worth exploring</h2>
-          </div>
-          <span id="result-count" class="result-count"></span>
-        </div>
-
-        <article class="answer-card">
-          <span class="answer-mark" aria-hidden="true">
-            <svg viewBox="0 0 24 24" fill="none">
-              <path d="M8 16.5 5.5 19v-4A7 7 0 1 1 19 12a7 7 0 0 1-7 7H9" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"></path>
-              <path d="M9 10h6M9 13h4" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"></path>
-            </svg>
-          </span>
-          <div>
-            <p id="answer-query" class="answer-query"></p>
-            <p id="answer-text" class="answer-text"></p>
-          </div>
-        </article>
-
-        <div id="places-grid" class="places-grid"></div>
-      </section>
-    </main>
-
-    <footer class="site-footer">
-      <div class="footer-shell">
-        <p><strong>WanderAI</strong><span>Local Qwen reasoning, grounded by Google Places.</span></p>
-        <div>
-          <span>No location is requested until you choose to share it.</span>
-          <a href="/docs" target="_blank" rel="noopener noreferrer">API documentation</a>
-        </div>
+        <p class="composer-note">WanderAI runs on your local Qwen model and grounds every answer in Google Places.</p>
       </div>
-    </footer>
+    </div>
 
     <template id="place-template">
       <article class="place-card">
@@ -219,7 +154,6 @@
           <span class="place-number"></span>
         </div>
         <div class="place-body">
-          <div class="verified-line"><span></span> Google Places result</div>
           <h3></h3>
           <p class="address"></p>
           <div class="rating-row">

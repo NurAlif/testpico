@@ -17,6 +17,7 @@ PLACE_FIELD_MASK = ",".join(
         "places.userRatingCount",
         "places.primaryType",
         "places.googleMapsUri",
+        "places.photos",
     ]
 )
 
@@ -163,9 +164,33 @@ class GoogleMapsClient:
                     primary_type=raw.get("primaryType"),
                     google_maps_url=maps_url,
                     embed_url=embed_url,
+                    photo=(raw.get("photos") or [None])[0],
                 )
             )
         return places
+
+    async def photo_url(self, name: str) -> str:
+        try:
+            response = await self.client.get(
+                f"https://places.googleapis.com/v1/{name}/media",
+                headers={"X-Goog-Api-Key": self._require_places_key()},
+                params={"maxWidthPx": 800, "skipHttpRedirect": "true"},
+                timeout=self.settings.google_request_timeout_seconds,
+            )
+            response.raise_for_status()
+        except httpx.TimeoutException as exc:
+            raise HTTPException(status_code=504, detail="Place photo timed out") from exc
+        except httpx.HTTPStatusError as exc:
+            raise HTTPException(
+                status_code=502,
+                detail="Place photo unavailable; check billing, API restrictions, and quota",
+            ) from exc
+        except httpx.RequestError as exc:
+            raise HTTPException(status_code=502, detail="Place photo unavailable") from exc
+        url = response.json().get("photoUri", "")
+        if not url.startswith("https://"):
+            raise HTTPException(status_code=502, detail="Place photo unavailable")
+        return url
 
     @staticmethod
     def _fallback_maps_url(place_id: str) -> str:

@@ -12,4 +12,4 @@ RUN useradd --create-home --uid 10001 appuser
 USER appuser
 
 EXPOSE 8001
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8001", "--workers", "1"]
+CMD ["sh", "-c", "uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8001} --workers 1"]

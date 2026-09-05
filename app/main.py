@@ -3,8 +3,9 @@ import json
 import time
 import uuid
 from collections.abc import AsyncIterator
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, suppress
 from pathlib import Path
+from uuid import UUID
 
 import httpx
 from fastapi import FastAPI, HTTPException, Request
@@ -14,17 +15,21 @@ from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
 from app.config import Settings, get_settings
+from app.gemini import GeminiClient
 from app.google_maps import GoogleMapsClient
+from app.history import HistoryStore
 from app.models import (
     ChatRequest,
     ChatResponse,
+    ConversationResponse,
     DirectionsRequest,
     DirectionsResponse,
+    Message,
     OpenAIChatRequest,
     Place,
+    PlacePhotoRequest,
     PlaceSearchRequest,
 )
-from app.ollama import OllamaClient
 from app.security import PUBLIC_PATHS, SlidingWindowLimiter, security_headers, verify_api_key
 from app.service import PlacesAssistant
 
@@ -37,15 +42,18 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     client = httpx.AsyncClient(
         limits=httpx.Limits(max_connections=50, max_keepalive_connections=20),
         follow_redirects=False,
-        headers={"User-Agent": "ollama-maps-assistant/1.0"},
+        headers={"User-Agent": "wanderai/1.0"},
     )
     maps = GoogleMapsClient(client, settings)
-    ollama = OllamaClient(client, settings)
+    gemini = GeminiClient(settings)
     app.state.settings = settings
     app.state.http_client = client
     app.state.maps = maps
-    app.state.ollama = ollama
-    app.state.assistant = PlacesAssistant(ollama, maps)
+    app.state.gemini = gemini
+    app.state.assistant = PlacesAssistant(gemini, maps)
+    history_store = HistoryStore(settings.history_database_path)
+    await history_store.initialize()
+    app.state.history_store = history_store
     app.state.limiter = SlidingWindowLimiter(
         settings.rate_limit_requests, settings.rate_limit_window_seconds
     )
@@ -54,7 +62,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 
 app = FastAPI(
-    title="Ollama Maps Assistant API",
+    title="WanderAI API",
     version="1.0.0",
     docs_url="/docs",
     redoc_url=None,
@@ -101,8 +109,8 @@ async def health(request: Request) -> dict[str, object]:
     settings: Settings = request.app.state.settings
     return {
         "status": "ok",
-        "model": settings.ollama_model,
-        "ollama_available": await request.app.state.ollama.is_available(),
+        "model": settings.gemini_model,
+        "model_available": await request.app.state.gemini.is_available(),
         "places_configured": bool(Settings.reveal(settings.google_places_api_key)),
         "embed_configured": bool(Settings.reveal(settings.google_maps_embed_api_key)),
     }
@@ -121,7 +129,85 @@ async def public_config(request: Request) -> dict[str, object]:
 
 @app.post("/api/chat", response_model=ChatResponse)
 async def chat(payload: ChatRequest, request: Request) -> ChatResponse:
-    return await request.app.state.assistant.chat(payload)
+    result = await request.app.state.assistant.chat(payload)
+    if payload.conversation_id:
+        saved_answer = result.answer
+        if result.places:
+            saved_answer = (
+                "This was a live Google Places search. Its place cards and photos are refreshed "
+                "when you run the search again."
+            )
+        await request.app.state.history_store.append(
+            str(payload.conversation_id),
+            [
+                Message(role="user", content=payload.message),
+                Message(role="assistant", content=saved_answer),
+            ],
+        )
+    return result
+
+
+@app.post("/api/chat/stream")
+async def chat_stream(payload: ChatRequest, request: Request) -> StreamingResponse:
+    """Stream the assistant answer as newline-delimited JSON events.
+
+    Lines are either {"type": "delta", "text": "..."} token chunks or a final
+    {"type": "done", "answer": "...", "places": [...]} event.
+    """
+    # Intent detection and the Places lookup run before streaming starts so that
+    # failures surface as normal HTTP error responses instead of mid-stream.
+    prepared = await request.app.state.assistant.prepare_stream(payload)
+
+    async def events() -> AsyncIterator[dict[str, object]]:
+        parts: list[str] = []
+        try:
+            async for chunk in request.app.state.assistant.stream_answer(payload, prepared):
+                parts.append(chunk)
+                yield {"type": "delta", "text": chunk}
+        except HTTPException as exc:
+            yield {"type": "error", "message": str(exc.detail)}
+            return
+        answer = "".join(parts).strip()
+        if payload.conversation_id:
+            saved_answer = answer
+            if prepared.places:
+                saved_answer = (
+                    "This was a live Google Places search. Its place cards and photos are "
+                    "refreshed when you run the search again."
+                )
+            with suppress(Exception):
+                # History persistence must never break the streamed answer.
+                await request.app.state.history_store.append(
+                    str(payload.conversation_id),
+                    [
+                        Message(role="user", content=payload.message),
+                        Message(role="assistant", content=saved_answer),
+                    ],
+                )
+        yield {
+            "type": "done",
+            "answer": answer,
+            "places": [place.model_dump() for place in prepared.places],
+        }
+
+    return StreamingResponse(
+        (json.dumps(event, ensure_ascii=False) + "\n" async for event in events()),
+        media_type="application/x-ndjson",
+    )
+
+
+@app.post("/api/conversations", response_model=ConversationResponse)
+async def create_conversation(request: Request) -> ConversationResponse:
+    conversation_id = await request.app.state.history_store.create_conversation()
+    return ConversationResponse(id=conversation_id)
+
+
+@app.get("/api/conversations/{conversation_id}", response_model=ConversationResponse)
+async def get_conversation(conversation_id: UUID, request: Request) -> ConversationResponse:
+    messages = await request.app.state.history_store.messages(str(conversation_id))
+    if messages is None:
+        raise HTTPException(status_code=404, detail="Conversation not found")
+    return ConversationResponse(id=conversation_id, messages=messages)
 
 
 @app.post("/api/places/search", response_model=list[Place])
@@ -133,6 +219,12 @@ async def search_places(payload: PlaceSearchRequest, request: Request) -> list[P
         open_now=payload.open_now,
         language_code=payload.language_code,
     )
+
+
+@app.post("/api/places/photo")
+async def place_photo(payload: PlacePhotoRequest, request: Request) -> JSONResponse:
+    url = await request.app.state.maps.photo_url(payload.name)
+    return JSONResponse({"url": url}, headers={"Cache-Control": "no-store"})
 
 
 @app.post("/api/maps/directions", response_model=DirectionsResponse)

@@ -1,4 +1,5 @@
 from typing import Literal
+from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -17,6 +18,7 @@ class ChatRequest(BaseModel):
     history: list[Message] = Field(default_factory=list, max_length=20)
     origin: str | None = Field(default=None, max_length=250)
     travel_mode: TravelMode | None = None
+    conversation_id: UUID | None = None
 
     @field_validator("origin")
     @classmethod
@@ -43,6 +45,22 @@ class DirectionsRequest(BaseModel):
     travel_mode: TravelMode = "driving"
 
 
+class PlacePhotoRequest(BaseModel):
+    name: str = Field(
+        max_length=4096, pattern=r"^places/[A-Za-z0-9_-]+/photos/[A-Za-z0-9_-]+$"
+    )
+
+
+class PhotoAuthor(BaseModel):
+    displayName: str = ""
+    uri: str | None = None
+
+
+class PlacePhoto(BaseModel):
+    name: str
+    authorAttributions: list[PhotoAuthor] = Field(default_factory=list)
+
+
 class Place(BaseModel):
     place_id: str
     name: str
@@ -54,6 +72,7 @@ class Place(BaseModel):
     primary_type: str | None = None
     google_maps_url: str
     embed_url: str | None = None
+    photo: PlacePhoto | None = None
 
 
 class PlaceIntent(BaseModel):
@@ -69,6 +88,11 @@ class ChatResponse(BaseModel):
     answer: str
     places: list[Place] = Field(default_factory=list)
     intent: PlaceIntent
+
+
+class ConversationResponse(BaseModel):
+    id: UUID
+    messages: list[Message] = Field(default_factory=list)
 
 
 class DirectionsResponse(BaseModel):

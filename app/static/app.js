@@ -1,24 +1,18 @@
 const form = document.querySelector("#chat-form");
 const messageInput = document.querySelector("#message");
-const messageCount = document.querySelector("#message-count");
 const originInput = document.querySelector("#origin");
 const travelMode = document.querySelector("#travel-mode");
 const apiKeyInput = document.querySelector("#api-key");
 const apiKeyWrap = document.querySelector("#api-key-wrap");
 const sendButton = document.querySelector("#send");
-const sendButtonLabel = sendButton.querySelector("span");
 const locateButton = document.querySelector("#locate");
-const ollamaStatus = document.querySelector("#ollama-status");
+const modelStatus = document.querySelector("#model-status");
 const mapsStatus = document.querySelector("#maps-status");
 const notice = document.querySelector("#notice");
-const welcome = document.querySelector("#welcome");
-const loadingPanel = document.querySelector("#loading");
-const results = document.querySelector("#results");
-const resultsTitle = document.querySelector("#results-title");
-const resultCount = document.querySelector("#result-count");
-const answerQuery = document.querySelector("#answer-query");
-const answerText = document.querySelector("#answer-text");
-const placesGrid = document.querySelector("#places-grid");
+const conversation = document.querySelector("#conversation");
+const thread = document.querySelector("#thread");
+const emptyState = document.querySelector("#empty-state");
+const newChatButton = document.querySelector("#new-chat");
 const placeTemplate = document.querySelector("#place-template");
 
 const mapDialog = document.querySelector("#map-dialog");
@@ -40,8 +34,16 @@ const routeNote = document.querySelector("#route-note");
 const showRouteButton = document.querySelector("#show-route");
 const routeMapsLink = document.querySelector("#route-maps-link");
 
+const ASSISTANT_AVATAR = `
+  <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+    <circle cx="12" cy="12" r="8.5" stroke="currentColor" stroke-width="1.7"></circle>
+    <path d="m13.9 7.8-2.1 4.1-4.1 2.2 4.6.1 1.6 2.1.2-4.5 2.2-4-2.4-.1Z" fill="currentColor"></path>
+  </svg>`;
+
 let history = [];
 let currentPlace = null;
+let conversationId = null;
+const CONVERSATION_KEY = "wanderAIConversationId";
 
 apiKeyInput.value = sessionStorage.getItem("mapsAssistantApiKey") || "";
 apiKeyInput.addEventListener("input", () => {
@@ -72,6 +74,53 @@ async function api(path, options = {}) {
   return body;
 }
 
+async function postChatStream(path, payload, { onDelta, onDone }) {
+  const response = await fetch(path, {
+    method: "POST",
+    headers: requestHeaders(),
+    body: JSON.stringify(payload),
+  });
+  if (!response.ok) {
+    const body = await response.json().catch(() => ({}));
+    throw new Error(errorDetail(body, response.status));
+  }
+  if (!response.body) {
+    const body = await response.json().catch(() => ({}));
+    onDone(body);
+    return;
+  }
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let final = null;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    let newline;
+    while ((newline = buffer.indexOf("\n")) !== -1) {
+      const line = buffer.slice(0, newline).trim();
+      buffer = buffer.slice(newline + 1);
+      if (!line) continue;
+      let event;
+      try {
+        event = JSON.parse(line);
+      } catch {
+        continue;
+      }
+      if (event.type === "delta") {
+        onDelta(event.text || "");
+      } else if (event.type === "done") {
+        final = event;
+      } else if (event.type === "error") {
+        throw new Error(event.message || "The response stream failed. Try again.");
+      }
+    }
+  }
+  if (!final) throw new Error("The response stream ended unexpectedly. Try again.");
+  onDone(final);
+}
+
 function setServiceBadge(element, state, heading, detail) {
   element.classList.remove("checking", "ready", "unavailable");
   element.classList.add(state);
@@ -85,16 +134,21 @@ function setNotice(message = "") {
   notice.hidden = !message;
 }
 
-function setBusy(busy) {
-  sendButton.disabled = busy;
-  messageInput.disabled = busy;
-  sendButtonLabel.textContent = busy ? "Searching…" : "Find places";
-  form.setAttribute("aria-busy", String(busy));
-  loadingPanel.hidden = !busy;
+function updateSendButton() {
+  const busy = form.getAttribute("aria-busy") === "true";
+  sendButton.disabled = busy || messageInput.value.trim().length === 0;
 }
 
-function updateMessageCount() {
-  messageCount.textContent = `${messageInput.value.length} / 4000`;
+function setBusy(busy) {
+  form.setAttribute("aria-busy", String(busy));
+  messageInput.disabled = busy;
+  newChatButton.disabled = busy;
+  updateSendButton();
+  if (busy) {
+    showTyping();
+  } else {
+    hideTyping();
+  }
 }
 
 function formatPlaceType(value) {
@@ -115,18 +169,161 @@ function reviewLabel(place) {
   return `${place.rating_count.toLocaleString()} ${label}`;
 }
 
-function renderAnswerText(text) {
-  answerText.replaceChildren();
+function renderAnswerText(text, target) {
+  target.replaceChildren();
   const normalized = text.replace(/^\s*[-*]\s+/gm, "• ");
   normalized.split(/(\*\*[^*]+\*\*)/g).forEach((part) => {
     if (part.startsWith("**") && part.endsWith("**")) {
       const strong = document.createElement("strong");
       strong.textContent = part.slice(2, -2);
-      answerText.append(strong);
+      target.append(strong);
     } else {
-      answerText.append(document.createTextNode(part));
+      target.append(document.createTextNode(part));
     }
   });
+}
+
+function scrollToBottom(smooth = true) {
+  conversation.scrollTo({
+    top: conversation.scrollHeight,
+    behavior: smooth ? "smooth" : "auto",
+  });
+}
+
+function makeAvatar() {
+  const avatar = document.createElement("span");
+  avatar.className = "msg-avatar";
+  avatar.setAttribute("aria-hidden", "true");
+  avatar.innerHTML = ASSISTANT_AVATAR;
+  return avatar;
+}
+
+function hideEmptyState() {
+  emptyState.hidden = true;
+}
+
+function appendUserBubble(text) {
+  const row = document.createElement("div");
+  row.className = "msg msg-user";
+  const bubble = document.createElement("div");
+  bubble.className = "bubble user-bubble";
+  bubble.textContent = text;
+  row.append(bubble);
+  thread.append(row);
+  scrollToBottom();
+}
+
+function appendPlacesBlock(body, places) {
+  const block = document.createElement("div");
+  block.className = "places-block";
+
+  const heading = document.createElement("div");
+  heading.className = "places-block-heading";
+  const label = document.createElement("span");
+  label.textContent = "Verified places";
+  const count = document.createElement("span");
+  count.className = "result-count";
+  count.textContent = `${places.length} verified ${places.length === 1 ? "place" : "places"}`;
+  heading.append(label, count);
+
+  const grid = document.createElement("div");
+  grid.className = "places-grid";
+  places.forEach((place, index) => grid.append(renderPlace(place, index)));
+
+  block.append(heading, grid);
+  body.append(block);
+}
+
+function createAssistantBubble() {
+  hideTyping();
+  const row = document.createElement("div");
+  row.className = "msg msg-assistant";
+  const body = document.createElement("div");
+  body.className = "msg-body";
+  const bubble = document.createElement("div");
+  bubble.className = "bubble assistant-bubble";
+  body.append(bubble);
+  row.append(makeAvatar(), body);
+  thread.append(row);
+  scrollToBottom(false);
+  return { body, bubble };
+}
+
+function appendAssistantBubble(response) {
+  const { body, bubble } = createAssistantBubble();
+  renderAnswerText(response.answer || "", bubble);
+  const places = response.places || [];
+  if (places.length) appendPlacesBlock(body, places);
+}
+
+function showTyping() {
+  hideTyping();
+  const row = document.createElement("div");
+  row.className = "msg msg-assistant";
+  row.id = "typing-row";
+  const bubble = document.createElement("div");
+  bubble.className = "bubble typing-bubble";
+  bubble.setAttribute("aria-label", "WanderAI is thinking");
+  [0, 1, 2].forEach(() => bubble.append(document.createElement("span")));
+  row.append(makeAvatar(), bubble);
+  thread.append(row);
+  scrollToBottom();
+}
+
+function hideTyping() {
+  const typing = thread.querySelector("#typing-row");
+  if (typing) typing.remove();
+}
+
+async function ensureConversation() {
+  if (conversationId) return conversationId;
+  const conversation = await api("/api/conversations", { method: "POST" });
+  conversationId = conversation.id;
+  localStorage.setItem(CONVERSATION_KEY, conversationId);
+  return conversationId;
+}
+
+async function newChat() {
+  photoObserver?.disconnect();
+  thread.querySelectorAll(".msg").forEach((message) => message.remove());
+  emptyState.hidden = false;
+  history = [];
+  conversationId = null;
+  setNotice("");
+  messageInput.value = "";
+  messageInput.style.height = "auto";
+  updateSendButton();
+  conversation.scrollTo({ top: 0 });
+  messageInput.focus();
+  try {
+    await ensureConversation();
+  } catch (error) {
+    setNotice(`Could not start a saved conversation: ${error.message}`);
+  }
+}
+
+newChatButton.addEventListener("click", () => void newChat());
+
+async function restoreConversation() {
+  const savedId = localStorage.getItem(CONVERSATION_KEY);
+  if (!savedId) {
+    await ensureConversation();
+    return;
+  }
+  try {
+    const saved = await api(`/api/conversations/${encodeURIComponent(savedId)}`);
+    conversationId = saved.id;
+    history = saved.messages || [];
+    if (!history.length) return;
+    hideEmptyState();
+    history.forEach((message) => {
+      if (message.role === "user") appendUserBubble(message.content);
+      else appendAssistantBubble({ answer: message.content, places: [] });
+    });
+  } catch {
+    localStorage.removeItem(CONVERSATION_KEY);
+    await ensureConversation();
+  }
 }
 
 function readBrowserLocation() {
@@ -218,6 +415,68 @@ function openPlaceMap(place) {
   mapDialog.showModal();
 }
 
+const photoObserver = "IntersectionObserver" in window
+  ? new IntersectionObserver((entries) => {
+      entries.forEach((entry) => {
+        if (entry.isIntersecting) {
+          photoObserver.unobserve(entry.target);
+          entry.target.loadPlacePhoto();
+        }
+      });
+    }, { root: conversation })
+  : null;
+
+function attachPlacePhoto(card, place) {
+  const visual = card.querySelector(".place-visual");
+  visual.removeAttribute("aria-hidden");
+  const caption = document.createElement("span");
+  caption.className = "photo-caption";
+  caption.textContent = place.photo ? "Loading photo…" : "Photo unavailable";
+  visual.append(caption);
+  if (!place.photo) return;
+
+  visual.loadPlacePhoto = async () => {
+    try {
+      const { url } = await api("/api/places/photo", {
+        method: "POST",
+        body: JSON.stringify({ name: place.photo.name }),
+      });
+      if (!visual.isConnected) return;
+      const img = document.createElement("img");
+      img.className = "place-photo";
+      img.alt = place.name;
+      img.decoding = "async";
+      img.referrerPolicy = "no-referrer";
+      img.onload = () => {
+        visual.classList.add("has-photo");
+        caption.replaceChildren(document.createTextNode("Google Maps"));
+        (place.photo.authorAttributions || []).forEach((author) => {
+          if (!author.displayName) return;
+          caption.append(document.createTextNode(" · "));
+          const credit = document.createElement("a");
+          credit.textContent = author.displayName;
+          if (author.uri?.startsWith("https://")) {
+            credit.href = author.uri;
+            credit.target = "_blank";
+            credit.rel = "noopener noreferrer";
+          }
+          caption.append(credit);
+        });
+      };
+      img.onerror = () => {
+        img.remove();
+        caption.textContent = "Photo unavailable";
+      };
+      img.src = url;
+      visual.prepend(img);
+    } catch {
+      caption.textContent = "Photo unavailable";
+    }
+  };
+  if (photoObserver) photoObserver.observe(visual);
+  else requestAnimationFrame(() => visual.loadPlacePhoto());
+}
+
 function renderPlace(place, index) {
   const card = placeTemplate.content.firstElementChild.cloneNode(true);
   card.querySelector(".place-number").textContent = String(index + 1).padStart(2, "0");
@@ -228,20 +487,8 @@ function renderPlace(place, index) {
   card.querySelector(".review-count").textContent = reviewLabel(place);
   card.querySelector(".place-maps-link").href = place.google_maps_url;
   card.querySelector(".map-button").addEventListener("click", () => openPlaceMap(place));
-  placesGrid.append(card);
-}
-
-function renderResponse(query, response) {
-  const places = response.places || [];
-  placesGrid.replaceChildren();
-  answerQuery.textContent = `You asked: “${query}”`;
-  renderAnswerText(response.answer);
-  resultCount.textContent = places.length ? `${places.length} verified ${places.length === 1 ? "place" : "places"}` : "Local answer";
-  resultsTitle.textContent = places.length ? "Places worth exploring" : "Your local answer";
-  places.forEach(renderPlace);
-  welcome.hidden = true;
-  results.hidden = false;
-  results.scrollIntoView({ behavior: "smooth", block: "start" });
+  attachPlacePhoto(card, place);
+  return card;
 }
 
 locateButton.addEventListener("click", () => fillBrowserLocation(locateButton, originInput));
@@ -320,15 +567,22 @@ showRouteButton.addEventListener("click", async () => {
   }
 });
 
-document.querySelectorAll(".prompt-chip").forEach((chip) => {
+document.querySelectorAll(".suggestion-card").forEach((chip) => {
   chip.addEventListener("click", () => {
     messageInput.value = chip.dataset.prompt;
-    updateMessageCount();
-    messageInput.focus();
+    messageInput.style.height = "auto";
+    messageInput.style.height = `${Math.min(messageInput.scrollHeight, 180)}px`;
+    updateSendButton();
+    form.requestSubmit();
   });
 });
 
-messageInput.addEventListener("input", updateMessageCount);
+messageInput.addEventListener("input", () => {
+  updateSendButton();
+  messageInput.style.height = "auto";
+  messageInput.style.height = `${Math.min(messageInput.scrollHeight, 180)}px`;
+});
+
 messageInput.addEventListener("keydown", (event) => {
   if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) {
     event.preventDefault();
@@ -342,30 +596,53 @@ form.addEventListener("submit", async (event) => {
   if (!message) return;
 
   setNotice("");
-  results.hidden = true;
-  welcome.hidden = true;
+  hideEmptyState();
+  appendUserBubble(message);
+  messageInput.value = "";
+  messageInput.style.height = "auto";
+  updateSendButton();
   setBusy(true);
+
+  let assistant = null;
+  let streamedAnswer = "";
+  const finish = (event) => {
+    if (!assistant) assistant = createAssistantBubble();
+    const finalAnswer = (event.answer || streamedAnswer).trim();
+    renderAnswerText(finalAnswer, assistant.bubble);
+    if (event.places?.length) appendPlacesBlock(assistant.body, event.places);
+    history.push(
+      { role: "user", content: message },
+      { role: "assistant", content: finalAnswer },
+    );
+    history = history.slice(-20);
+    setServiceBadge(modelStatus, "ready", "Google AI", "Gemini online");
+    if (event.places?.length) setServiceBadge(mapsStatus, "ready", "Google Maps", "Places live");
+  };
+
   try {
-    const response = await api("/api/chat", {
-      method: "POST",
-      body: JSON.stringify({
+    await ensureConversation();
+    await postChatStream(
+      "/api/chat/stream",
+      {
         message,
         history: history.slice(-12),
         origin: originInput.value.trim() || null,
         travel_mode: travelMode.value,
-      }),
-    });
-    history.push(
-      { role: "user", content: message },
-      { role: "assistant", content: response.answer },
+        conversation_id: conversationId,
+      },
+      {
+        onDelta: (text) => {
+          if (!assistant) assistant = createAssistantBubble();
+          streamedAnswer += text;
+          renderAnswerText(streamedAnswer, assistant.bubble);
+          scrollToBottom(false);
+        },
+        onDone: finish,
+      },
     );
-    history = history.slice(-20);
-    renderResponse(message, response);
-    setServiceBadge(ollamaStatus, "ready", "Local model", "Qwen online");
-    if (response.places?.length) setServiceBadge(mapsStatus, "ready", "Google Maps", "Places live");
   } catch (error) {
     setNotice(error.message);
-    welcome.hidden = false;
+    if (assistant && streamedAnswer) renderAnswerText(streamedAnswer, assistant.bubble);
     if (error.message.toLowerCase().includes("api key")) {
       apiKeyWrap.hidden = false;
       apiKeyWrap.open = true;
@@ -391,12 +668,12 @@ async function checkServices() {
 
   if (healthResult.status === "fulfilled") {
     const health = healthResult.value;
-    const modelReady = health.ollama_available ?? health.status === "ok";
-    const modelName = health.model || "Local model";
+    const modelReady = health.model_available ?? health.status === "ok";
+    const modelName = health.model || "Gemini";
     setServiceBadge(
-      ollamaStatus,
+      modelStatus,
       modelReady ? "ready" : "unavailable",
-      "Local model",
+      "Google AI",
       modelReady ? modelName : "Unavailable",
     );
     const mapsReady = health.places_configured;
@@ -407,7 +684,7 @@ async function checkServices() {
       mapsReady ? "Places ready" : "Needs setup",
     );
   } else {
-    setServiceBadge(ollamaStatus, "unavailable", "Local model", "Backend offline");
+    setServiceBadge(modelStatus, "unavailable", "Google AI", "Backend offline");
     setServiceBadge(mapsStatus, "unavailable", "Google Maps", "Backend offline");
   }
 
@@ -416,5 +693,6 @@ async function checkServices() {
   }
 }
 
-updateMessageCount();
+updateSendButton();
 checkServices();
+restoreConversation().catch((error) => setNotice(`Could not restore saved chat: ${error.message}`));

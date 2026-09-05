@@ -1,0 +1,29 @@
+services:
+  - type: web
+    name: wanderai-api
+    runtime: docker
+    healthCheckPath: /health
+    plan: starter
+    disk:
+      name: wanderai-data
+      mountPath: /var/data
+      sizeGB: 1
+    envVars:
+      - key: HISTORY_DATABASE_PATH
+        value: /var/data/wanderai.sqlite3
+      - key: GEMINI_MODEL
+        value: gemini-2.5-flash
+      - key: API_MODEL_NAME
+        value: gemini-2.5-flash-maps
+      - key: CORS_ORIGINS
+        value: https://pico.parasyst.it.com
+      - key: TRUSTED_HOSTS
+        value: pico.parasyst.it.com,wanderai-api.onrender.com
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: GOOGLE_PLACES_API_KEY
+        sync: false
+      - key: GOOGLE_MAPS_EMBED_API_KEY
+        sync: false
+      - key: APP_API_KEY
+        generateValue: true
