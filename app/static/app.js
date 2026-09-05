@@ -138,7 +138,7 @@ function createActivity(body) {
   const list = document.createElement("ul");
   const reasoning = document.createElement("details");
   reasoning.hidden = true;
-  reasoning.open = true;
+  reasoning.open = false;
   const label = document.createElement("summary");
   label.textContent = "Thinking";
   const text = document.createElement("div");
@@ -158,7 +158,7 @@ function createActivity(body) {
         if (!item) { item = document.createElement("li"); tools.set(event.id, item); list.append(item); }
         item.dataset.state = event.state;
         item.textContent = event.message;
-        status.textContent = event.message;
+        status.textContent = "";
       }
       if (event.type === "reasoning" && event.text) {
         reasoning.hidden = false;
@@ -172,7 +172,7 @@ function createActivity(body) {
       panel.setAttribute("aria-busy", "false");
       label.textContent = failed ? "Thinking interrupted" : "Thinking complete";
       summary.textContent = failed ? "Response interrupted" : "Activity complete";
-      status.textContent = failed ? "The response stopped before completion." : "Response complete";
+      status.textContent = "";
       for (const item of tools.values()) {
         if (item.dataset.state === "running") {
           item.dataset.state = "error";
@@ -799,9 +799,16 @@ function authMode() {
   document.querySelector("#register-email").required = registering;
   document.querySelector("#password").minLength = registering ? 8 : 1;
   document.querySelector("#password").autocomplete = registering ? "new-password" : "current-password";
-  document.querySelector("#auth-submit").textContent = registering ? "Register" : "Log in";
-  document.querySelector("#auth-toggle").textContent = registering ? "Already registered? Log in" : "Create an account";
-  document.querySelector("#auth-toggle").href = registering ? "#login" : "#register";
+  const authSubmit = document.querySelector("#auth-submit");
+  const authToggle = document.querySelector("#auth-toggle");
+  authSubmit.querySelector(".auth-submit-label").textContent = registering ? "Create account" : "Log in";
+  authToggle.querySelector(".auth-toggle-label").textContent = registering ? "Log in instead" : "Create an account";
+  document.querySelector("#auth-toggle-description").textContent = registering ? "Already have an account?" : "New to Wander Pico?";
+  authSubmit.querySelector(".auth-icon-login").toggleAttribute("hidden", registering);
+  authSubmit.querySelector(".auth-icon-register").toggleAttribute("hidden", !registering);
+  authToggle.querySelector(".auth-icon-login").toggleAttribute("hidden", !registering);
+  authToggle.querySelector(".auth-icon-register").toggleAttribute("hidden", registering);
+  authToggle.href = registering ? "#login" : "#register";
   authError.textContent = "";
 }
 window.addEventListener("hashchange", authMode);
@@ -879,9 +886,15 @@ function renderHistory() {
     button.type = "button";
     button.className = "history-item";
     button.setAttribute("aria-current", String(chat.id === conversationId));
-    button.textContent = chat.title;
+    const title = document.createElement("span");
+    title.className = "history-title";
+    title.textContent = chat.title;
+    button.title = chat.title;
+    button.append(title);
     const date = document.createElement("small");
-    date.textContent = new Date(chat.updated_at.replace(" ", "T") + "Z").toLocaleString();
+    const updatedAt = new Date(chat.updated_at.replace(" ", "T") + "Z");
+    date.textContent = updatedAt.toLocaleDateString(undefined, { month: "short", day: "numeric", ...(updatedAt.getFullYear() !== new Date().getFullYear() ? { year: "numeric" } : {}) });
+    date.title = updatedAt.toLocaleString();
     button.append(date);
     button.addEventListener("click", () => openChat(chat.id).catch(error => setNotice(error.message)));
     list.append(button);

@@ -71,7 +71,7 @@ function pe(e) {
 	let r = document.createElement("div");
 	r.className = "activity-status", r.setAttribute("role", "status");
 	let i = document.createElement("ul"), a = document.createElement("details");
-	a.hidden = !0, a.open = !0;
+	a.hidden = !0, a.open = !1;
 	let o = document.createElement("summary");
 	o.textContent = "Thinking";
 	let s = document.createElement("div");
@@ -85,12 +85,12 @@ function pe(e) {
 		update(e) {
 			if (e.type === "status" && (r.textContent = e.message), e.type === "tool") {
 				let t = l.get(e.id);
-				t || (t = document.createElement("li"), l.set(e.id, t), i.append(t)), t.dataset.state = e.state, t.textContent = e.message, r.textContent = e.message;
+				t || (t = document.createElement("li"), l.set(e.id, t), i.append(t)), t.dataset.state = e.state, t.textContent = e.message, r.textContent = "";
 			}
 			e.type === "reasoning" && e.text && (a.hidden = !1, s.textContent = (s.textContent + e.text).slice(-24e3), c()), I(!1);
 		},
 		finish(e = !1) {
-			t.classList.remove("is-processing"), t.setAttribute("aria-busy", "false"), o.textContent = e ? "Thinking interrupted" : "Thinking complete", n.textContent = e ? "Response interrupted" : "Activity complete", r.textContent = e ? "The response stopped before completion." : "Response complete";
+			t.classList.remove("is-processing"), t.setAttribute("aria-busy", "false"), o.textContent = e ? "Thinking interrupted" : "Thinking complete", n.textContent = e ? "Response interrupted" : "Activity complete", r.textContent = "";
 			for (let e of l.values()) e.dataset.state === "running" && (e.dataset.state = "error", e.textContent += " - interrupted");
 			t.open = e;
 		}
@@ -435,7 +435,9 @@ function q(e) {
 }
 var J = [], Y = !1;
 function X() {
-	Y = location.hash === "#register", document.querySelector("#auth-title").textContent = Y ? "Create your account" : "Welcome back", document.querySelector("#identifier-label").firstChild.textContent = Y ? "Username" : "Username or email", document.querySelector("#register-email-label").hidden = !Y, document.querySelector("#register-email").required = Y, document.querySelector("#password").minLength = Y ? 8 : 1, document.querySelector("#password").autocomplete = Y ? "new-password" : "current-password", document.querySelector("#auth-submit").textContent = Y ? "Register" : "Log in", document.querySelector("#auth-toggle").textContent = Y ? "Already registered? Log in" : "Create an account", document.querySelector("#auth-toggle").href = Y ? "#login" : "#register", K.textContent = "";
+	Y = location.hash === "#register", document.querySelector("#auth-title").textContent = Y ? "Create your account" : "Welcome back", document.querySelector("#identifier-label").firstChild.textContent = Y ? "Username" : "Username or email", document.querySelector("#register-email-label").hidden = !Y, document.querySelector("#register-email").required = Y, document.querySelector("#password").minLength = Y ? 8 : 1, document.querySelector("#password").autocomplete = Y ? "new-password" : "current-password";
+	let e = document.querySelector("#auth-submit"), t = document.querySelector("#auth-toggle");
+	e.querySelector(".auth-submit-label").textContent = Y ? "Create account" : "Log in", t.querySelector(".auth-toggle-label").textContent = Y ? "Log in instead" : "Create an account", document.querySelector("#auth-toggle-description").textContent = Y ? "Already have an account?" : "New to Wander Pico?", e.querySelector(".auth-icon-login").toggleAttribute("hidden", Y), e.querySelector(".auth-icon-register").toggleAttribute("hidden", !Y), t.querySelector(".auth-icon-login").toggleAttribute("hidden", !Y), t.querySelector(".auth-icon-register").toggleAttribute("hidden", Y), t.href = Y ? "#login" : "#register", K.textContent = "";
 }
 window.addEventListener("hashchange", X), X();
 function Z() {
@@ -485,9 +487,15 @@ function $() {
 	let e = document.querySelector("#history-list"), t = document.querySelector("#history-search").value.toLowerCase();
 	e.replaceChildren(), J.filter((e) => e.title.toLowerCase().includes(t)).forEach((t) => {
 		let n = document.createElement("button");
-		n.type = "button", n.className = "history-item", n.setAttribute("aria-current", String(t.id === T)), n.textContent = t.title;
-		let r = document.createElement("small");
-		r.textContent = (/* @__PURE__ */ new Date(t.updated_at.replace(" ", "T") + "Z")).toLocaleString(), n.append(r), n.addEventListener("click", () => Me(t.id).catch((e) => A(e.message))), e.append(n);
+		n.type = "button", n.className = "history-item", n.setAttribute("aria-current", String(t.id === T));
+		let r = document.createElement("span");
+		r.className = "history-title", r.textContent = t.title, n.title = t.title, n.append(r);
+		let i = document.createElement("small"), a = /* @__PURE__ */ new Date(t.updated_at.replace(" ", "T") + "Z");
+		i.textContent = a.toLocaleDateString(void 0, {
+			month: "short",
+			day: "numeric",
+			...a.getFullYear() === (/* @__PURE__ */ new Date()).getFullYear() ? {} : { year: "numeric" }
+		}), i.title = a.toLocaleString(), n.append(i), n.addEventListener("click", () => Me(t.id).catch((e) => A(e.message))), e.append(n);
 	}), e.children.length || (e.textContent = "No saved chats found.");
 }
 document.querySelector("#history-search").addEventListener("input", $);

@@ -25,9 +25,20 @@ onMounted(() => import("../app/static/app.js"));
           <label id="register-email-label" hidden>Email<input id="register-email" type="email" autocomplete="email" maxlength="254"></label>
           <label>Password<input id="password" type="password" autocomplete="current-password" required maxlength="128"></label>
           <p id="auth-error" role="alert"></p>
-          <button id="auth-submit" type="submit" class="new-chat-button">Log in</button>
+          <button id="auth-submit" type="submit" class="new-chat-button auth-action">
+            <svg class="auth-icon auth-icon-login" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M10 5H6a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h4m4-4 3-3-3-3m3 3H9" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+            <svg class="auth-icon auth-icon-register" viewBox="0 0 24 24" fill="none" aria-hidden="true" hidden><path d="M15 19a6 6 0 0 0-12 0m6-8a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm9-5v6m-3-3h6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+            <span class="auth-submit-label">Log in</span>
+          </button>
         </form>
-        <p><a id="auth-toggle" href="#register">Create an account</a></p>
+        <p class="auth-switch">
+          <span id="auth-toggle-description">New to Wander Pico?</span>
+          <a id="auth-toggle" href="#register">
+            <svg class="auth-icon auth-icon-register" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M15 19a6 6 0 0 0-12 0m6-8a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm9-5v6m-3-3h6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+            <svg class="auth-icon auth-icon-login" viewBox="0 0 24 24" fill="none" aria-hidden="true" hidden><path d="M10 5H6a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h4m4-4 3-3-3-3m3 3H9" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+            <span class="auth-toggle-label">Create an account</span>
+          </a>
+        </p>
       </div>
     </section>
     <a class="skip-link" href="#message">Skip to chat input</a>

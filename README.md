@@ -1,4 +1,16 @@
+<a id="top"></a>
+
 # Wander Pico
+
+**Try the live app online: [pico.parasyst.it.com](https://pico.parasyst.it.com)**
+
+**Find places worth visiting. See the evidence. Keep exploring.**
+
+[Get started](#quick-start) · [Screenshot tour](#screenshot-tour) · [Why build from scratch?](#why-build-from-scratch-instead-of-open-webui) · [Documentation menu](#documentation-menu)
+
+[![Wander Pico desktop in dark mode: saved conversations, cafe recommendations, Google photos, ratings, and map actions](docs/images/darkmode%20desktop.png)](docs/images/darkmode%20desktop.png)
+
+*Local discovery with live place data, your choice of AI, and a purpose-built interface. Select any screenshot to view it at full size.*
 
 > A small, production-shaped local discovery agent: choose an AI provider, ask for a place,
 > and get grounded recommendations with live Google data, photos, maps, and saved chat history.
@@ -12,9 +24,109 @@ The same Vue frontend can run against either the Python/FastAPI backend or the i
 Cloudflare Worker. The local Python app is the full first-run experience and stores its data
 in SQLite. The Worker uses D1 and is intended for a hosted demo.
 
+## Documentation menu
+
+Choose a path below, or expand the screenshot tour to see the app before installing it.
+Detailed reference tables are expandable to keep this page easy to scan.
+
+| I want to… | Go to |
+|---|---|
+| Understand the project | [Features](#what-it-does) · [Why build from scratch?](#why-build-from-scratch-instead-of-open-webui) · [Screenshot tour](#screenshot-tour) |
+| Run it locally | [Quick start](#quick-start) · [First-run setup](#first-run-setup-behavior) · [Docker / Open WebUI](#docker-and-open-webui) |
+| Connect AI and maps | [AI providers](#ai-providers) · [Google Maps setup](#google-maps-platform-setup) · [Configuration](#configuration-reference) |
+| Understand or change the code | [Architecture](#architecture) · [Repository map](#repository-map) · [Technology](#technology-and-dependencies) · [Development](#development-workflow) · [Testing](#testing) |
+| Deploy a demo | [Cloudflare](#cloudflare-deployment) · [Render](#render-deployment) |
+| Integrate or operate it | [API](#api-overview) · [Persistence and encryption](#persistence-and-encryption) · [Security](#security-model) |
+| Solve a problem or learn more | [Troubleshooting](#troubleshooting) · [Cost and data](#cost-and-data-notes) · [References](#useful-references) · [License](#license) |
+
+[↑ Back to menu](#documentation-menu) · [Back to top](#top)
+
+## Why build from scratch instead of Open WebUI?
+
+Wander Pico uses a custom frontend and agent backend because the product is a **local
+place-discovery experience**. The goal is to own the journey from connecting a model to
+comparing real places, opening a map, and continuing a saved conversation.
+
+| Project priority | Why a custom implementation fits |
+|---|---|
+| A place-first interface | Recommendations become cards with photos, ratings, addresses, and map actions, with a dedicated map modal and mobile layout. |
+| Guided setup | The local first-run flow detects credentials, discovers Ollama models, tests the selected AI, and verifies Google Places before the first chat. |
+| Control over the agent | The backend owns the bounded search/details/finish loop, validates place IDs, and streams progress alongside structured results. |
+| Control over the whole experience | Provider settings, account-scoped keys, saved rich results, themes, and follow-up suggestions can evolve together. |
+| Two deployment paths | The same Vue interface targets a local FastAPI/SQLite app or a hosted Cloudflare Worker/D1 backend. |
+
+Building this way also makes the implementation inspectable end to end: the UI, tool loop,
+provider adapters, storage, and deployment code all live in this repository. “From scratch”
+here means building the application around these needs using Vue, FastAPI, and other existing
+libraries—not reimplementing those foundations.
+
+**The tradeoff is maintenance.** This project must maintain its own authentication, chat UI,
+accessibility, provider integrations, security controls, and tests. Reusing an existing chat
+interface can reduce the amount of application code to own when a custom discovery flow is
+not the priority.
+
+**Open WebUI remains an optional client.** The repository includes an OpenAI-compatible
+`/v1` adapter and a Docker Compose profile for it. Use the built-in UI for the experience
+shown here, or follow [Docker and Open WebUI](#docker-and-open-webui) to connect that client.
+The custom UI is a product choice, not a claim that Open WebUI cannot be extended.
+
+[↑ Back to menu](#documentation-menu) · [Back to top](#top)
+
+## Screenshot tour
+
+The desktop overview is shown above. Expand a step below, then select its image for the
+full-size view. These are captured examples; available models and live place results vary.
+
+<details>
+<summary><strong>1. Sign in and resume your discoveries</strong></summary>
+
+Sign in to keep discoveries and conversations connected to your account.
+
+[![Login screen with account creation and saved-conversation access](docs/images/login.png)](docs/images/login.png)
+
+</details>
+
+<details>
+<summary><strong>2. Connect a model with guided onboarding</strong></summary>
+
+Choose your AI, connect Google Places, and verify the setup before chatting. [Setup details](#first-run-setup-behavior).
+
+[![First-run setup with cloud providers, local Ollama, model selection, and connection testing](docs/images/onboard%20setup.png)](docs/images/onboard%20setup.png)
+
+</details>
+
+<details>
+<summary><strong>3. Choose your AI provider</strong></summary>
+
+Switch providers and configure the optional Ollama fallback. [Provider reference](#ai-providers).
+
+[![AI settings showing provider choices and an optional local Ollama fallback](docs/images/ai%20choices.png)](docs/images/ai%20choices.png)
+
+</details>
+
+<details>
+<summary><strong>4. Explore a place on the map</strong></summary>
+
+Inspect a recommended place without leaving the conversation, or open it in Google Maps.
+
+[![Place detail modal with an embedded Google map, rating, address, and photo gallery](docs/images/maps%20modal.png)](docs/images/maps%20modal.png)
+
+</details>
+
+<details>
+<summary><strong>5. Continue on mobile in light mode</strong></summary>
+
+The narrow layout keeps place cards, follow-up prompts, and chat within reach.
+
+<a href="docs/images/mobile%20light%20mode.png"><img src="docs/images/mobile%20light%20mode.png" alt="Mobile light-mode chat with a place card, follow-up suggestions, progress, and message composer" width="360"></a>
+
+</details>
+
+[↑ Back to menu](#documentation-menu) · [Back to top](#top)
+
 ## What it does
 
-- Supports Google Gemini, DeepSeek, OpenRouter, Groq, and local Ollama.
+- Supports Google Gemini, DeepSeek, OpenRouter, FreeRouter, Groq, and local Ollama.
 - Runs a bounded model-directed tool loop instead of a fixed search template.
 - Searches Google Places, inspects relevant place details, and asks the model to compare
   evidence before recommending anything.
@@ -25,6 +137,8 @@ in SQLite. The Worker uses D1 and is intended for a hosted demo.
 - Saves accounts, sessions, chat history, rich message results, and encrypted provider keys.
 - Includes an OpenAI-compatible `/v1` adapter for Open WebUI and similar clients.
 - Ships with responsive light/dark UI and Playwright coverage for desktop and mobile.
+
+[↑ Back to menu](#documentation-menu) · [Back to top](#top)
 
 ## Quick start
 
@@ -64,10 +178,15 @@ points the backend at `host.docker.internal:11434`.
 uvicorn app.main:app --host 127.0.0.1 --port 8001
 ```
 
-Open [http://localhost:8001](http://localhost:8001), then log in with the seeded demo account:
+Open [http://localhost:8001](http://localhost:8001). You can use either account option:
 
-- Username: `testpico`
-- Password: `testpico`
+| Option | How to sign in |
+|---|---|
+| **Try the seeded demo user** | Log in with username **`testpico`** and password **`testpico`**. The local backend creates this account automatically; no registration is needed. |
+| **Create your own account** | Select **Create an account** on the login screen, enter your username, email, and password, then submit the form. For later logins, use your username or email and password. |
+
+A new account has its own conversations and saved provider keys. First-run connection setup
+is shared by the local instance, so creating another account does not reset completed setup.
 
 The first-run guide opens automatically. Choose an AI provider, test it, verify Google
 Places, and select **Finish & start chatting**. The guide is marked complete for this local
@@ -77,6 +196,8 @@ connections** in the sidebar.
 > The seeded account is intentionally convenient for a local demo. Do not expose it to the
 > internet unchanged. Create a new account and remove or disable the seed before treating the
 > project as a real service.
+
+[↑ Back to menu](#documentation-menu) · [Back to top](#top)
 
 ## First-run setup behavior
 
@@ -94,6 +215,8 @@ write endpoints still require a valid app login.
 
 Keys typed into the setup UI are submitted directly to the backend. They are never written to
 `localStorage`, included in chat history, or returned by configuration endpoints.
+
+[↑ Back to menu](#documentation-menu) · [Back to top](#top)
 
 ## AI providers
 
@@ -113,6 +236,8 @@ in the browser; provider keys are encrypted on the backend and scoped to the sig
 Fallback is deliberately conservative: it retries a failed cloud model step on Ollama only
 before answer or reasoning output has started. It never silently switches after a partial
 answer and never sends data to an arbitrary client-provided endpoint.
+
+[↑ Back to menu](#documentation-menu) · [Back to top](#top)
 
 ## Google Maps Platform setup
 
@@ -135,6 +260,8 @@ Recommended Google Cloud steps:
 
 Do not reuse the private Places key as the browser-visible Embed key. The app does not need
 Maps JavaScript API, Routes API, Directions API (Legacy), or Geocoding API.
+
+[↑ Back to menu](#documentation-menu) · [Back to top](#top)
 
 ## Architecture
 
@@ -198,7 +325,12 @@ scripts/
 tests/                    Python, Worker, streaming, and Playwright tests
 ```
 
+[↑ Back to menu](#documentation-menu) · [Back to top](#top)
+
 ## Technology and dependencies
+
+<details>
+<summary>Expand libraries, versions, and their roles</summary>
 
 ### Backend
 
@@ -228,7 +360,14 @@ Development dependencies are `pytest`, `pytest-asyncio`, `respx`, and `ruff`; se
 
 The Python Docker image serves prebuilt frontend assets, so Node.js is not required at runtime.
 
+</details>
+
+[↑ Back to menu](#documentation-menu) · [Back to top](#top)
+
 ## Configuration reference
+
+<details>
+<summary>Expand environment variables and defaults</summary>
 
 Copy `.env.example` to `.env`. Empty optional values are valid.
 
@@ -263,6 +402,10 @@ Copy `.env.example` to `.env`. Empty optional values are valid.
 An account-scoped key saved from the UI takes precedence over a shared `.env` key for that
 provider. A blank personal key falls back to the server value.
 
+</details>
+
+[↑ Back to menu](#documentation-menu) · [Back to top](#top)
+
 ## Development workflow
 
 Install both dependency sets:
@@ -288,35 +431,106 @@ npm run build:ui
 artifacts. `app/static/app.js` is the browser controller for authentication, conversations,
 stream processing, maps, and dynamically rendered result cards.
 
+[↑ Back to menu](#documentation-menu) · [Back to top](#top)
+
 ## Testing
 
-Run all backend unit/integration tests:
+The automated suites cover individual functions, backend integration behavior, and browser
+interactions. External AI and Google responses are mocked in these suites. The optional live
+smoke check is separate and makes real requests.
+
+### Test scope
+
+| Layer | Test files | What is covered |
+|---|---|---|
+| Python agent and streaming | `tests/test_service_stream.py` | Search/details/finish flow, conversation context, unknown place IDs, repeated actions, tool-error recovery, and JSON/stream response contracts. |
+| Python AI adapters | `tests/test_providers.py`, `tests/test_ollama.py`, `tests/test_gemini.py` | Provider routing, model catalogs, request-scoped model choices, missing credentials, stream failures, fallback before output, Ollama discovery, and separation of reasoning from answer text. |
+| Google Places adapter | `tests/test_google_maps.py` | Minimal connection checks, field masks and result bounds, optional embed keys, photo resolution, invalid photo paths, and sanitized upstream failures. |
+| Accounts, history, and credentials | `tests/test_accounts.py`, `tests/test_history.py`, `tests/test_provider_keys.py` | Seeded login, registration, duplicate accounts, conversation ownership, persistence across restarts, rich results, encrypted keys, and account isolation. These include API/SQLite integration tests. |
+| Local setup and API protections | `tests/test_setup.py`, `tests/test_security.py`, `tests/test_docs.py` | Encrypted setup storage and completion, localhost restrictions, rate limiting, documentation content-security policies, and OpenAPI authentication declarations. |
+| Worker agent and streams | `tests/worker-agent.test.mjs`, `tests/worker-stream.test.mjs` | Tool selection and bounds, safe tool errors, partial JSON/Unicode parsing, progress before completion, and final-answer persistence. |
+| Worker providers and Google photos | `tests/worker-providers.test.mjs`, `tests/worker-ollama-settings.test.mjs`, `tests/worker-photos.test.mjs` | Provider/model/credential isolation, fallback rules, Ollama model discovery, and photo lookup through Place Details. |
+| Worker accounts, keys, and docs | `tests/worker-accounts.test.mjs`, `tests/worker-provider-keys.test.mjs`, `tests/worker-docs.test.mjs` | Ownership, migration behavior, persistence, logout, encrypted key replacement/removal, and OpenAPI/docs responses using local test doubles. |
+| Browser stream parser | `tests/chat-stream.test.mjs` | Split UTF-8 chunks, final events without trailing newlines, interrupted streams, and error events. Runs under Node without opening a browser. |
+| Browser UI | `tests/ui/interface.spec.mjs` | Guided setup, login/logout and registration mode, suggestions, chat switching/search, streamed responses, mobile navigation, themes, map dialogs, AI settings, and Ollama model selection. Runs in Chromium with mocked API routes. |
+
+These checks do not establish a coverage percentage or verify a deployed Cloudflare/Render
+service. Browser tests exercise the real frontend against mocked responses rather than a live
+backend. The live smoke check validates configured connections, not the complete browser-to-
+production journey.
+
+### Prepare the test environment
+
+Run commands from the repository root with your Python virtual environment activated:
+
+```powershell
+pip install -r requirements.txt -r requirements-dev.txt
+npm ci
+npx playwright install chromium
+```
+
+### Run Python unit and integration tests
 
 ```powershell
 python -m pytest -q
 ```
 
-Run Worker tests:
+To focus on one area, pass a file or select tests by name:
+
+```powershell
+python -m pytest -q tests/test_google_maps.py
+python -m pytest -q tests/test_providers.py -k fallback
+```
+
+### Run Worker and browser-parser tests
+
+This command includes both the Worker suites and `chat-stream.test.mjs`:
 
 ```powershell
 node --test tests/*.test.mjs
 ```
 
-Run browser tests:
+To run only the Worker agent tests:
 
 ```powershell
-npx playwright install chromium
+node --test tests/worker-agent.test.mjs
+```
+
+### Run browser interaction tests
+
+Build the frontend first so the tests exercise your latest Vue changes:
+
+```powershell
+npm run build:ui
 npm run test:ui
 ```
 
-Run a safe live check against every configured provider and Google Places:
+Playwright starts the static test server on `http://127.0.0.1:4173` automatically. You do not
+need to start FastAPI or configure live provider keys for this suite. Screenshots and failure
+artifacts are written under `test-results/`.
+
+For a visible browser or a single scenario:
+
+```powershell
+npm run test:ui -- --headed
+npm run test:ui -- --grep "mobile navigation"
+```
+
+### Optional: check real AI and Google connections
+
+Configure the relevant server credentials in `.env` and start Ollama if you want to check the
+local model, then run:
 
 ```powershell
 python -m scripts.smoke_providers
 ```
 
-The smoke script prints only provider names, model names, sanitized failures, and pass/skip
-states. It never prints API keys. Missing optional provider keys are reported as `SKIP`.
+This checks structured agent responses from configured AI providers and a minimal Google
+Places request. It reports `PASS`, `FAIL`, or `SKIP`; missing provider keys and an unavailable
+Ollama service are skipped. It reads server settings, so it does not test personal keys saved
+only through the UI. Real requests can consume provider and Google quota.
+
+[↑ Back to menu](#documentation-menu) · [Back to top](#top)
 
 ## Docker and Open WebUI
 
@@ -341,6 +555,8 @@ In Open WebUI, add an OpenAI-compatible connection:
 - URL from another local container: `http://host.docker.internal:8001/v1`
 - API key: the configured `APP_API_KEY`
 - Model: the value of `API_MODEL_NAME`
+
+[↑ Back to menu](#documentation-menu) · [Back to top](#top)
 
 ## Cloudflare deployment
 
@@ -373,6 +589,8 @@ npm run build:site
 it automatically. Update `APP_ORIGIN`, Worker URLs, CORS policy, and trusted deployment values
 for your own domain.
 
+[↑ Back to menu](#documentation-menu) · [Back to top](#top)
+
 ## Render deployment
 
 `render.yaml` defines a Docker web service with a persistent disk for SQLite. Create the
@@ -380,7 +598,12 @@ service from the blueprint, provide the secret environment variables in Render, 
 `CORS_ORIGINS` and `TRUSTED_HOSTS` at the real frontend/API hosts. The first-run writer is
 localhost-only, so hosted credentials belong in Render's secret configuration.
 
+[↑ Back to menu](#documentation-menu) · [Back to top](#top)
+
 ## API overview
+
+<details>
+<summary>Expand API routes and streaming formats</summary>
 
 Interactive OpenAPI documentation is available at
 [http://localhost:8001/docs](http://localhost:8001/docs).
@@ -410,6 +633,10 @@ Interactive OpenAPI documentation is available at
 The streaming endpoint uses NDJSON rather than Server-Sent Events. The `/v1` compatibility
 endpoint uses standard OpenAI-style JSON/SSE responses.
 
+</details>
+
+[↑ Back to menu](#documentation-menu) · [Back to top](#top)
+
 ## Persistence and encryption
 
 The local database defaults to `data/wanderai.sqlite3`. It stores:
@@ -429,6 +656,8 @@ file belongs in Git.
 
 For Cloudflare, `PROVIDER_ENCRYPTION_KEY` must be a stable base64-encoded 32-byte Worker secret.
 
+[↑ Back to menu](#documentation-menu) · [Back to top](#top)
+
 ## Security model
 
 - API keys are redacted from status responses, validation errors, chat payloads, browser
@@ -447,6 +676,8 @@ For Cloudflare, `PROVIDER_ENCRYPTION_KEY` must be a stable base64-encoded 32-byt
   details.
 - The built-in rate limiter is process-local. Use a gateway, reverse proxy, or distributed
   limiter for multiple replicas.
+
+[↑ Back to menu](#documentation-menu) · [Back to top](#top)
 
 ## Troubleshooting
 
@@ -487,6 +718,8 @@ npm run build:ui
 
 Then hard-refresh the browser. The generated frontend is served from `app/static/`.
 
+[↑ Back to menu](#documentation-menu) · [Back to top](#top)
+
 ## Cost and data notes
 
 AI providers and Google Maps Platform may charge for requests. The setup checks make real,
@@ -496,6 +729,8 @@ before sharing a public demo.
 
 Google place cards and photo URLs are live data. Treat Google's terms, caching limits, and
 attribution requirements as part of deployment readiness.
+
+[↑ Back to menu](#documentation-menu) · [Back to top](#top)
 
 ## Useful references
 
@@ -512,7 +747,11 @@ attribution requirements as part of deployment readiness.
 - [Cloudflare Workers](https://developers.cloudflare.com/workers/)
 - [Cloudflare D1](https://developers.cloudflare.com/d1/)
 
+[↑ Back to menu](#documentation-menu) · [Back to top](#top)
+
 ## License
 
 No license file is currently included. Add one before distributing or accepting external
 contributions.
+
+[↑ Back to menu](#documentation-menu) · [Back to top](#top)

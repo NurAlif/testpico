@@ -2707,7 +2707,7 @@ ri({
 			let t = document.querySelector("#message");
 			t.value = e, t.dispatchEvent(new Event("input", { bubbles: !0 })), document.querySelector("#chat-form").requestSubmit();
 		}
-		return vt(() => import("./ui-app-iwxDaorM.js")), (e, n) => (H(), U(z, null, [
+		return vt(() => import("./ui-app-1HyaFLq8.js")), (e, n) => (H(), U(z, null, [
 			n[7] ||= W("section", {
 				id: "auth-page",
 				class: "auth-page",
@@ -2746,13 +2746,67 @@ ri({
 					W("button", {
 						id: "auth-submit",
 						type: "submit",
-						class: "new-chat-button"
-					}, "Log in")
+						class: "new-chat-button auth-action"
+					}, [
+						W("svg", {
+							class: "auth-icon auth-icon-login",
+							viewBox: "0 0 24 24",
+							fill: "none",
+							"aria-hidden": "true"
+						}, [W("path", {
+							d: "M10 5H6a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h4m4-4 3-3-3-3m3 3H9",
+							stroke: "currentColor",
+							"stroke-width": "1.8",
+							"stroke-linecap": "round",
+							"stroke-linejoin": "round"
+						})]),
+						W("svg", {
+							class: "auth-icon auth-icon-register",
+							viewBox: "0 0 24 24",
+							fill: "none",
+							"aria-hidden": "true",
+							hidden: ""
+						}, [W("path", {
+							d: "M15 19a6 6 0 0 0-12 0m6-8a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm9-5v6m-3-3h6",
+							stroke: "currentColor",
+							"stroke-width": "1.8",
+							"stroke-linecap": "round",
+							"stroke-linejoin": "round"
+						})]),
+						W("span", { class: "auth-submit-label" }, "Log in")
+					])
 				]),
-				W("p", null, [W("a", {
+				W("p", { class: "auth-switch" }, [W("span", { id: "auth-toggle-description" }, "New to Wander Pico?"), W("a", {
 					id: "auth-toggle",
 					href: "#register"
-				}, "Create an account")])
+				}, [
+					W("svg", {
+						class: "auth-icon auth-icon-register",
+						viewBox: "0 0 24 24",
+						fill: "none",
+						"aria-hidden": "true"
+					}, [W("path", {
+						d: "M15 19a6 6 0 0 0-12 0m6-8a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm9-5v6m-3-3h6",
+						stroke: "currentColor",
+						"stroke-width": "1.8",
+						"stroke-linecap": "round",
+						"stroke-linejoin": "round"
+					})]),
+					W("svg", {
+						class: "auth-icon auth-icon-login",
+						viewBox: "0 0 24 24",
+						fill: "none",
+						"aria-hidden": "true",
+						hidden: ""
+					}, [W("path", {
+						d: "M10 5H6a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h4m4-4 3-3-3-3m3 3H9",
+						stroke: "currentColor",
+						"stroke-width": "1.8",
+						"stroke-linecap": "round",
+						"stroke-linejoin": "round"
+					})]),
+					W("span", { class: "auth-toggle-label" }, "Create an account")
+				])])
 			])], -1),
 			n[8] ||= W("a", {
 				class: "skip-link",

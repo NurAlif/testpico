@@ -134,6 +134,24 @@ test('theme follows the system preference by default and remembers a manual choi
   expect(errors).toEqual([]);
 });
 
+test('authentication actions remain visible and icon-labelled in dark mode', async ({page}) => {
+  await page.emulateMedia({colorScheme: 'dark'});
+  const errors = await setup(page);
+  await page.locator('#logout').click();
+  const accountLink = page.locator('#auth-toggle');
+  await expect(accountLink).toBeVisible();
+  await expect(accountLink.locator('svg:not([hidden])')).toHaveCount(1);
+  await expect(accountLink).toHaveCSS('color', 'rgb(154, 223, 209)');
+  await expect(accountLink).toHaveCSS('background-color', 'rgb(41, 68, 62)');
+  await expect(page.locator('#auth-submit').locator('svg:not([hidden])')).toHaveCount(1);
+  await page.screenshot({path:'test-results/auth-dark-actions.png',fullPage:true,animations:'disabled'});
+  await accountLink.click();
+  await expect(page.locator('#auth-submit')).toContainText('Create account');
+  await expect(page.locator('#auth-toggle')).toContainText('Log in instead');
+  await expect(page.locator('#auth-submit').locator('.auth-icon-register')).toBeVisible();
+  expect(errors).toEqual([]);
+});
+
 test('map card, unavailable preview, dialog close and registration mode', async ({page}) => {
   const errors = await setup(page);
   await page.route('**/api/chat/stream', route => route.fulfill({contentType:'application/x-ndjson',body:JSON.stringify({type:'done',answer:'Try this beach.',places:[{name:'Sadranan Beach',address:'Tepus, Gunungkidul',rating:4.6,rating_count:1900,google_maps_url:'https://www.google.com/maps/search/?api=1&query=Sadranan',primary_type:'beach'}]})+'\n'}));
@@ -251,4 +269,24 @@ test('Ollama automatically loads installed models into a select and uses the cho
   await expect(page.getByRole('button',{name:'Save settings'})).toBeDisabled();
   await expect(page.getByText('No chat models installed.',{exact:false})).toBeVisible();
   expect(errors).toEqual([]);
+});
+
+test('dark conversation and workspace controls stay subdued and fit mobile', async ({page}) => {
+  await page.emulateMedia({colorScheme:'dark'});
+  await setup(page);
+  await page.getByRole('button',{name:/Find my coffee spot/}).click();
+  const followup = page.locator('.followup-actions button').first();
+  await expect(followup).toBeVisible();
+  await expect(followup).toHaveCSS('background-color','rgba(0, 0, 0, 0)');
+  await expect(page.locator('.user-bubble')).toHaveCSS('color','rgb(232, 240, 238)');
+  await page.locator('.docs-link').hover();
+  await expect(page.locator('.docs-link')).toHaveCSS('background-color','rgb(42, 55, 52)');
+  await page.screenshot({path:'test-results/chat-dark-refined.png',fullPage:true});
+  await followup.click();
+  await expect(page.locator('.user-bubble').last()).toContainText('What else is nearby?');
+  await page.setViewportSize({width:390,height:844});
+  await page.locator('#sidebar-toggle').click();
+  await expect(page.locator('.sidebar-utilities')).toBeVisible();
+  await page.screenshot({path:'test-results/workspace-dark-mobile.png',fullPage:true,animations:'disabled'});
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 });
