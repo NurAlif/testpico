@@ -2707,7 +2707,7 @@ ri({
 			let t = document.querySelector("#message");
 			t.value = e, t.dispatchEvent(new Event("input", { bubbles: !0 })), document.querySelector("#chat-form").requestSubmit();
 		}
-		return vt(() => import("./ui-app-1HyaFLq8.js")), (e, n) => (H(), U(z, null, [
+		return vt(() => import("./ui-app-7OH7e2yE.js")), (e, n) => (H(), U(z, null, [
 			n[7] ||= W("section", {
 				id: "auth-page",
 				class: "auth-page",
@@ -2739,6 +2739,11 @@ ri({
 						required: "",
 						maxlength: "128"
 					})]),
+					W("p", {
+						id: "auth-success",
+						role: "status",
+						"aria-live": "polite"
+					}),
 					W("p", {
 						id: "auth-error",
 						role: "alert"

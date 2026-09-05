@@ -16,6 +16,7 @@ test('worker accounts enforce ownership, migration, persistence, and logout', as
  const {token}=await (await call('/api/auth/login',{identifier:'TESTPICO',password:'testpico'})).json();
  assert.ok(token);
  const {id}=await (await call('/api/conversations',{},token)).json();
+ assert.deepEqual(await (await call('/api/conversations',null,token)).json(),[]);
  db.prepare("INSERT INTO messages(conversation_id,role,content) VALUES (?,'user','A saved chat')").run(id);
  assert.equal((await (await call('/api/conversations',null,token)).json())[0].title,'A saved chat');
  assert.equal((await call('/api/auth/register',{username:'alice',email:'alice@example.com',password:'password123'})).status,200);

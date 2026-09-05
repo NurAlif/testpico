@@ -33,6 +33,7 @@ def test_accounts_persist_and_isolate_chats(tmp_path, monkeypatch):
             ).json()["token"]
             headers = {"Authorization": f"Bearer {token}"}
             cid = client.post("/api/conversations", headers=headers).json()["id"]
+            assert client.get("/api/conversations", headers=headers).json() == []
             assert (
                 client.post(
                     "/api/chat", headers=headers, json={"message": "Hello", "conversation_id": cid}

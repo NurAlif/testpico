@@ -592,7 +592,9 @@ export default {
         const { results } = await env.DB.prepare(`SELECT c.id,
           COALESCE((SELECT substr(content,1,80) FROM messages WHERE conversation_id=c.id AND role='user' ORDER BY id LIMIT 1),'New chat') AS title,
           COALESCE((SELECT MAX(created_at) FROM messages WHERE conversation_id=c.id),c.created_at) AS updated_at
-          FROM conversations c WHERE user_id=? ORDER BY updated_at DESC, c.rowid DESC`).bind(userId).all();
+          FROM conversations c WHERE user_id=?
+          AND EXISTS (SELECT 1 FROM messages WHERE conversation_id=c.id)
+          ORDER BY updated_at DESC, c.rowid DESC`).bind(userId).all();
         return responseWithCors(json(results), headers);
       }
       if (request.method === "POST" && url.pathname === "/api/conversations") {

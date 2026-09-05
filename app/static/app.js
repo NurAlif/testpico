@@ -370,24 +370,20 @@ async function ensureConversation() {
 }
 
 async function newChat() {
+  if (form.getAttribute("aria-busy") === "true") return;
   photoObserver?.disconnect();
   thread.querySelectorAll(".msg").forEach((message) => message.remove());
   emptyState.hidden = false;
   history = [];
   conversationId = null;
+  try { localStorage.removeItem(CONVERSATION_KEY); } catch {}
   setNotice("");
   messageInput.value = "";
   messageInput.style.height = "auto";
   updateSendButton();
   conversation.scrollTo({ top: 0 });
   messageInput.focus();
-  setBusy(true);
-  try {
-    await ensureConversation();
-    await refreshHistory();
-  } catch (error) {
-    setNotice(`Could not start a saved conversation: ${error.message}`);
-  } finally { setBusy(false); }
+  renderHistory();
 }
 
 newChatButton.addEventListener("click", () => void newChat());
@@ -810,6 +806,7 @@ function authMode() {
   authToggle.querySelector(".auth-icon-register").toggleAttribute("hidden", registering);
   authToggle.href = registering ? "#login" : "#register";
   authError.textContent = "";
+  document.querySelector("#auth-success").textContent = "";
 }
 window.addEventListener("hashchange", authMode);
 authMode();
@@ -836,6 +833,7 @@ authForm.addEventListener("submit", async event => {
   const button = document.querySelector("#auth-submit");
   button.disabled = true;
   authError.textContent = "";
+  document.querySelector("#auth-success").textContent = "";
   try {
     const identifier = document.querySelector("#identifier").value.trim();
     const password = document.querySelector("#password").value;
@@ -844,7 +842,7 @@ authForm.addEventListener("submit", async event => {
       location.hash = "login";
       authMode();
       document.querySelector("#password").value = "";
-      setTimeout(() => { authError.textContent = "Account created. Log in to continue."; }, 0);
+      setTimeout(() => { document.querySelector("#auth-success").textContent = "Your account is ready! Log in to start exploring."; }, 0);
     } else {
       const result = await api("/api/auth/login", {method:"POST",body:JSON.stringify({identifier,password})});
       authToken = result.token;

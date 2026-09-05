@@ -1,5 +1,25 @@
 import { test, expect } from '@playwright/test';
 const chats = [{id:'beach', title:'A beach escape in Gunungkidul', updated_at:'2026-09-05 03:00:00'}, {id:'food', title:'Good food around Blok M', updated_at:'2026-09-04 02:00:00'}];
+test('blank chats stay unsaved until the first message', async ({page}) => {
+  const created = [];
+  page.on('request', request => {
+    if (new URL(request.url()).pathname === '/api/conversations' && request.method() === 'POST') created.push(request);
+  });
+  await setup(page);
+  await page.locator('#new-chat').click();
+  await page.locator('#message').fill('Unsent draft');
+  await page.locator('#new-chat').click();
+  await expect(page.locator('#message')).toHaveValue('');
+  await expect(page.locator('.history-item')).toHaveCount(0);
+  expect(created).toHaveLength(0);
+  await page.locator('#message').fill('Hello');
+  await page.locator('#send').click();
+  await expect(page.locator('.assistant-bubble')).toContainText('A lovely local spot.');
+  expect(created).toHaveLength(1);
+  await page.locator('#new-chat').click();
+  expect(created).toHaveLength(1);
+  await expect(page.locator('.msg')).toHaveCount(0);
+});
 async function setup(page, saved = false, firstRun = null) {
   const errors = []; page.on('pageerror', error => errors.push(error.message));
   await page.route('**/health', route => route.fulfill({json:{status:'ok',model_available:true,model:'Assistant ready',places_configured:true}}));

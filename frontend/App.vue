@@ -24,6 +24,7 @@ onMounted(() => import("../app/static/app.js"));
           <label id="identifier-label">Username or email<input id="identifier" autocomplete="username" required maxlength="254"></label>
           <label id="register-email-label" hidden>Email<input id="register-email" type="email" autocomplete="email" maxlength="254"></label>
           <label>Password<input id="password" type="password" autocomplete="current-password" required maxlength="128"></label>
+          <p id="auth-success" role="status" aria-live="polite"></p>
           <p id="auth-error" role="alert"></p>
           <button id="auth-submit" type="submit" class="new-chat-button auth-action">
             <svg class="auth-icon auth-icon-login" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M10 5H6a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h4m4-4 3-3-3-3m3 3H9" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path></svg>

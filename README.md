@@ -8,6 +8,8 @@
 
 [Get started](#quick-start) · [Screenshot tour](#screenshot-tour) · [Why build from scratch?](#why-build-from-scratch-instead-of-open-webui) · [Documentation menu](#documentation-menu)
 
+[![Wander Pico maps modal: embedded Google map, place details, ratings, and photo gallery](docs/images/maps%20modal.png)](docs/images/maps%20modal.png)
+
 [![Wander Pico desktop in dark mode: saved conversations, cafe recommendations, Google photos, ratings, and map actions](docs/images/darkmode%20desktop.png)](docs/images/darkmode%20desktop.png)
 
 *Local discovery with live place data, your choice of AI, and a purpose-built interface. Select any screenshot to view it at full size.*
@@ -74,7 +76,7 @@ The custom UI is a product choice, not a claim that Open WebUI cannot be extende
 
 ## Screenshot tour
 
-The desktop overview is shown above. Expand a step below, then select its image for the
+The maps modal and dark-mode desktop overview are shown above. Expand a step below, then select its image for the
 full-size view. These are captured examples; available models and live place results vary.
 
 <details>

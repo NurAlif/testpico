@@ -120,7 +120,9 @@ class AccountStore:
                 ORDER BY id LIMIT 1),'New chat') AS title,
                 COALESCE((SELECT MAX(created_at) FROM messages
                 WHERE conversation_id=c.id),c.created_at) AS updated_at
-                FROM conversations c WHERE user_id=? ORDER BY updated_at DESC, c.rowid DESC""",
+                FROM conversations c WHERE user_id=?
+                AND EXISTS (SELECT 1 FROM messages WHERE conversation_id=c.id)
+                ORDER BY updated_at DESC, c.rowid DESC""",
                     (user_id,),
                 )
             ]
