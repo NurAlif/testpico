@@ -3,6 +3,7 @@
   "private": true,
   "version": "1.0.0",
   "scripts": {
+    "build:site": "node scripts/build-site.mjs",
     "deploy": "wrangler deploy",
     "db:migrate": "wrangler d1 migrations apply wanderai-data --remote"
   },
