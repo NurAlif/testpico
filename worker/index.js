@@ -98,7 +98,7 @@ async function searchPlaces(env, query, intent = {}) {
   });
   if (!response.ok) throw new Error("Google Places request failed");
   const data = await response.json();
-  return (data.places || []).map((place) => {
+  return Promise.all((data.places || []).map(async (place) => {
     const mapsUrl =
       place.googleMapsUri ||
       `https://www.google.com/maps/search/?api=1&query_place_id=${encodeURIComponent(place.id)}`;
@@ -107,6 +107,19 @@ async function searchPlaces(env, query, intent = {}) {
           env.GOOGLE_MAPS_EMBED_API_KEY,
         )}&q=place_id:${encodeURIComponent(place.id)}`
       : null;
+    let photo = (place.photos || [])[0] || null;
+    // Text Search can omit photo metadata even when the place has photos.
+    // Ask Place Details only in that case, keeping the browser key-free.
+    if (!photo && place.id) {
+      try {
+        const detail = await fetch(`https://places.googleapis.com/v1/${place.id}`, {
+          headers: { "x-goog-api-key": env.GOOGLE_PLACES_API_KEY, "x-goog-fieldmask": "photos" },
+        });
+        if (detail.ok) photo = (await detail.json()).photos?.[0] || null;
+      } catch {
+        // A card without a photo remains usable.
+      }
+    }
     return {
     place_id: place.id,
     name: place.displayName?.text || "Unnamed place",
@@ -118,9 +131,25 @@ async function searchPlaces(env, query, intent = {}) {
     primary_type: place.primaryType ?? null,
     google_maps_url: mapsUrl,
     embed_url: embedUrl,
-    photo: (place.photos || [])[0] || null,
+    photo,
     };
-  });
+  }));
+}
+
+async function getPlacePhoto(env, name) {
+  if (!env.GOOGLE_PLACES_API_KEY) throw new Error("Google Places is not configured");
+  const validPhotoName = /^places\/[^/]+\/photos\/[^/]+$/.test(name);
+  if (!validPhotoName) throw new Error("Invalid place photo reference");
+  const response = await fetch(
+    `https://places.googleapis.com/v1/${name}/media?maxHeightPx=800&maxWidthPx=1200&skipHttpRedirect=true`,
+    { headers: { "x-goog-api-key": env.GOOGLE_PLACES_API_KEY } },
+  );
+  if (!response.ok) throw new Error("Google Places photo request failed");
+  const data = await response.json();
+  if (typeof data.photoUri !== "string" || !data.photoUri.startsWith("https://")) {
+    throw new Error("Google Places returned no photo URL");
+  }
+  return { url: data.photoUri };
 }
 
 async function answer(env, message, history, places) {
@@ -181,6 +210,10 @@ export default {
       if (request.method === "POST" && url.pathname === "/api/places/search") {
         const payload = await body(request);
         return responseWithCors(json(await searchPlaces(env, String(payload.query || ""), payload)), headers);
+      }
+      if (request.method === "POST" && url.pathname === "/api/places/photo") {
+        const payload = await body(request);
+        return responseWithCors(json(await getPlacePhoto(env, String(payload.name || ""))), headers);
       }
       return responseWithCors(error("Not found", 404), headers);
     } catch (caught) {
