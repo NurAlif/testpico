@@ -30,22 +30,21 @@ async function body(request) {
 }
 
 function modelReady(env) {
-  return Boolean(env.GEMINI_API_KEY);
+  return Boolean(env.DEEPSEEK_API_KEY);
 }
 
 async function gemini(env, system, prompt, jsonMode = false) {
-  if (!modelReady(env)) throw new Error("Gemini is not configured");
+  if (!modelReady(env)) throw new Error("DeepSeek is not configured");
   const response = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(
-      env.GEMINI_MODEL || "gemini-3.1-flash-lite",
-    )}:generateContent`,
+    "https://api.deepseek.com/chat/completions",
     {
       method: "POST",
-      headers: { "content-type": "application/json", "x-goog-api-key": env.GEMINI_API_KEY },
+      headers: { "content-type": "application/json", authorization: `Bearer ${env.DEEPSEEK_API_KEY}` },
       body: JSON.stringify({
-        systemInstruction: { parts: [{ text: system }] },
-        contents: [{ role: "user", parts: [{ text: prompt }] }],
-        generationConfig: { temperature: jsonMode ? 0 : 0.2, responseMimeType: jsonMode ? "application/json" : "text/plain" },
+        model: env.DEEPSEEK_MODEL || "deepseek-v4-flash",
+        messages: [{ role: "system", content: system }, { role: "user", content: prompt }],
+        temperature: jsonMode ? 0 : 0.2,
+        response_format: jsonMode ? { type: "json_object" } : undefined,
       }),
     },
   );
@@ -56,15 +55,15 @@ async function gemini(env, system, prompt, jsonMode = false) {
     try {
       const providerError = await response.json();
       providerStatus = String(providerError?.error?.status || providerError?.error?.code || providerStatus);
-      console.error("Gemini provider rejection", response.status, providerStatus, String(providerError?.error?.message || "").slice(0, 500));
+      console.error("DeepSeek provider rejection", response.status, providerStatus, String(providerError?.error?.message || "").slice(0, 500));
     } catch {
       // The HTTP status below is still useful when Google did not return JSON.
     }
-    throw new Error(`Gemini API rejected the request (HTTP ${response.status}: ${providerStatus})`);
+    throw new Error(`DeepSeek API rejected the request (HTTP ${response.status}: ${providerStatus})`);
   }
   const data = await response.json();
-  const text = data.candidates?.[0]?.content?.parts?.map((part) => part.text || "").join("").trim();
-  if (!text) throw new Error("Gemini returned no answer");
+  const text = String(data.choices?.[0]?.message?.content || "").trim();
+  if (!text) throw new Error("DeepSeek returned no answer");
   return text;
 }
 
@@ -151,7 +150,7 @@ export default {
     if (request.method === "OPTIONS") return responseWithCors(new Response(null, { status: 204 }), { ...headers, "access-control-allow-methods": "GET, POST, OPTIONS", "access-control-allow-headers": "content-type, authorization" });
     const url = new URL(request.url);
     try {
-      if (request.method === "GET" && url.pathname === "/health") return responseWithCors(json({ status: "ok", model: env.GEMINI_MODEL || "gemini-3.1-flash-lite", model_available: modelReady(env), places_configured: Boolean(env.GOOGLE_PLACES_API_KEY), embed_configured: Boolean(env.GOOGLE_MAPS_EMBED_API_KEY) }), headers);
+      if (request.method === "GET" && url.pathname === "/health") return responseWithCors(json({ status: "ok", model: env.DEEPSEEK_MODEL || "deepseek-v4-flash", model_available: modelReady(env), places_configured: Boolean(env.GOOGLE_PLACES_API_KEY), embed_configured: Boolean(env.GOOGLE_MAPS_EMBED_API_KEY) }), headers);
       if (request.method === "GET" && url.pathname === "/api/config") return responseWithCors(json({ api_auth_required: false, maps_configured: Boolean(env.GOOGLE_PLACES_API_KEY), embed_configured: Boolean(env.GOOGLE_MAPS_EMBED_API_KEY), max_place_results: Number(env.MAX_PLACE_RESULTS || 5) }), headers);
       if (request.method === "POST" && url.pathname === "/api/conversations") {
         const id = crypto.randomUUID();

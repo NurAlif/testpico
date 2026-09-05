@@ -12,7 +12,7 @@
     }
   ],
   "vars": {
-    "GEMINI_MODEL": "gemini-3.1-flash-lite",
+    "DEEPSEEK_MODEL": "deepseek-v4-flash",
     "MAX_PLACE_RESULTS": "5",
     "APP_ORIGIN": "https://pico.parasyst.it.com"
   }
