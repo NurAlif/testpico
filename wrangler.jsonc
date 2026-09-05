@@ -1,0 +1,19 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "wanderai-api",
+  "main": "worker/index.js",
+  "compatibility_date": "2026-09-05",
+  "account_id": "d71b5eb6a8337184249002a8d504bbf0",
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "wanderai-data",
+      "database_id": "150c22cf-2ce1-44de-b121-c57ad7412a21"
+    }
+  ],
+  "vars": {
+    "GEMINI_MODEL": "gemini-2.5-flash",
+    "MAX_PLACE_RESULTS": "5",
+    "APP_ORIGIN": "https://pico.parasyst.it.com"
+  }
+}

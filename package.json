@@ -1,0 +1,12 @@
+{
+  "name": "wanderai-worker",
+  "private": true,
+  "version": "1.0.0",
+  "scripts": {
+    "deploy": "wrangler deploy",
+    "db:migrate": "wrangler d1 migrations apply wanderai-data --remote"
+  },
+  "devDependencies": {
+    "wrangler": "^4.129.0"
+  }
+}
