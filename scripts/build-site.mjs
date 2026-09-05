@@ -22,7 +22,7 @@ await writeFile(
     {
       proxies: {
         "/health": { upstream: "https://wanderai-api.testpico.workers.dev/health" },
-        "/api/*": { upstream: "https://wanderai-api.testpico.workers.dev", rateLimit: "100/hour/ip" },
+        "/api/*": { upstream: "https://wanderai-api.testpico.workers.dev/api", rateLimit: "100/hour/ip" },
       },
     },
     null,
