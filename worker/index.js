@@ -37,7 +37,7 @@ async function gemini(env, system, prompt, jsonMode = false) {
   if (!modelReady(env)) throw new Error("Gemini is not configured");
   const response = await fetch(
     `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(
-      env.GEMINI_MODEL || "gemini-2.5-flash",
+      env.GEMINI_MODEL || "gemini-3.1-flash-lite",
     )}:generateContent`,
     {
       method: "POST",
@@ -49,7 +49,19 @@ async function gemini(env, system, prompt, jsonMode = false) {
       }),
     },
   );
-  if (!response.ok) throw new Error("Gemini request failed");
+  if (!response.ok) {
+    // Keep the provider's status code for safe diagnostics; do not return its
+    // raw response because it can contain request-specific information.
+    let providerStatus = "unknown error";
+    try {
+      const providerError = await response.json();
+      providerStatus = String(providerError?.error?.status || providerError?.error?.code || providerStatus);
+      console.error("Gemini provider rejection", response.status, providerStatus, String(providerError?.error?.message || "").slice(0, 500));
+    } catch {
+      // The HTTP status below is still useful when Google did not return JSON.
+    }
+    throw new Error(`Gemini API rejected the request (HTTP ${response.status}: ${providerStatus})`);
+  }
   const data = await response.json();
   const text = data.candidates?.[0]?.content?.parts?.map((part) => part.text || "").join("").trim();
   if (!text) throw new Error("Gemini returned no answer");
@@ -139,7 +151,7 @@ export default {
     if (request.method === "OPTIONS") return responseWithCors(new Response(null, { status: 204 }), { ...headers, "access-control-allow-methods": "GET, POST, OPTIONS", "access-control-allow-headers": "content-type, authorization" });
     const url = new URL(request.url);
     try {
-      if (request.method === "GET" && url.pathname === "/health") return responseWithCors(json({ status: "ok", model: env.GEMINI_MODEL || "gemini-2.5-flash", model_available: modelReady(env), places_configured: Boolean(env.GOOGLE_PLACES_API_KEY), embed_configured: Boolean(env.GOOGLE_MAPS_EMBED_API_KEY) }), headers);
+      if (request.method === "GET" && url.pathname === "/health") return responseWithCors(json({ status: "ok", model: env.GEMINI_MODEL || "gemini-3.1-flash-lite", model_available: modelReady(env), places_configured: Boolean(env.GOOGLE_PLACES_API_KEY), embed_configured: Boolean(env.GOOGLE_MAPS_EMBED_API_KEY) }), headers);
       if (request.method === "GET" && url.pathname === "/api/config") return responseWithCors(json({ api_auth_required: false, maps_configured: Boolean(env.GOOGLE_PLACES_API_KEY), embed_configured: Boolean(env.GOOGLE_MAPS_EMBED_API_KEY), max_place_results: Number(env.MAX_PLACE_RESULTS || 5) }), headers);
       if (request.method === "POST" && url.pathname === "/api/conversations") {
         const id = crypto.randomUUID();
